@@ -345,6 +345,7 @@ function showToast(msg, type = 'success') {
  * @param {object} opts { type: 'warning'|'error'|'info'|'success', title, message, section: 'inventory'|'global', persistent: bool }
  */
 function registerAlert(id, opts) {
+  if (state.dismissedAlerts.has(id)) return;
   state.alerts[id] = { ...opts, id };
   const section = opts.section || 'global';
   const trayId = section === 'global' ? 'global-alerts-tray' : `alerts-tray-${section}`;
@@ -379,6 +380,13 @@ function removeAlert(id) {
   }
 }
 
+/** Permanently dismisses an alert for this user. */
+function dismissAlert(id) {
+  state.dismissedAlerts.add(id);
+  localStorage.setItem('dismissed_alerts', JSON.stringify(Array.from(state.dismissedAlerts)));
+  removeAlert(id);
+}
+
 /** Renders all alerts belonging to a specific section into a container. */
 function renderAlertTrays(container, section = 'global') {
   if (!container) return;
@@ -395,10 +403,48 @@ function renderAlertTrays(container, section = 'global') {
         <div class="warning-text">${alert.title}</div>
         <div class="warning-subtext">${alert.message}</div>
       </div>
+      <button class="modal-close" onclick="dismissAlert('${id}')">✕</button>
     `;
     upsertElement(container, id, `system-alert alert-${alert.type}`, bannerHtml);
   }
   cleanupElements(container, activeIds);
+  updateInteractiveState();
+}
+
+/**
+ * Updates the disabled state of all primary action buttons.
+ * Buttons are disabled if:
+ *  - An action is currently running
+ *  - A global security lock is active (e.g. anchor mismatch)
+ *  - A waiting for sync state is active
+ */
+function updateInteractiveState() {
+  const isLocked = typeof state.getSecurityLock === 'function' ? state.getSecurityLock() : false;
+  const isRunning = state.running || state.waitingForSync;
+  const shouldDisable = isLocked || isRunning;
+
+  // List of IDs that should be blocked
+  const buttonIds = [
+    'btn-claim',
+    'btn-dispatch-gas',
+    'btn-manage-miners',
+    'btn-exec-miner-batch',
+    'select-all-btn'
+  ];
+
+  buttonIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.disabled = shouldDisable;
+      // Provide a visual hint for security lock
+      el.classList.toggle('security-blocked', isLocked);
+    }
+  });
+
+  // Also block miner grid slots if locked by security
+  document.querySelectorAll('.mm-grid-slot').forEach(el => {
+    el.classList.toggle('security-blocked', isLocked);
+  });
 }
 
 /* ── Clipboard ───────────────────────────────────────────────── */
@@ -419,3 +465,4 @@ function copyToClipboard(text) {
 /* ── Window Exports (for HTML onclick handlers) ──────────────── */
 window.copyToClipboard = copyToClipboard;
 window.toggleDebugLogs = toggleDebugLogs;
+window.dismissAlert = dismissAlert;

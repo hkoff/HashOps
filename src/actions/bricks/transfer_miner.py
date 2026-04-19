@@ -11,6 +11,7 @@ from src.core.blockchain import get_nft_contract, get_miner_contract_address
 
 from src.actions.ui_state import _upd, _log_miner_action, get_wallet_name
 from src.actions.utils import format_web3_error
+from src.core.security import validate_authorized_wallet, validate_contract, SecurityException
 
 def run_transfer_batch_for_wallet(
     wallet: Dict[str, Any], transfers: List[Dict[str, Any]], w3: Web3, 
@@ -55,6 +56,11 @@ def run_transfer_batch_for_wallet(
                 logger.error(red_bold(f"[{name}] Unable to determine NFT contract for {t_name} #{nft_id}. Skipping."))
                 continue
 
+            # [SECURITY] Universal Integrity Guard Check
+            validate_authorized_wallet(address, f"NFT Transfer Sender ({name})")
+            validate_authorized_wallet(t_dest_address, f"NFT Transfer Dest ({name})")
+            validate_contract(nft_addr, f"NFT Contract ({name})")
+
             nft_contract = get_nft_contract(w3, nft_addr)
             dest_chk = Web3.to_checksum_address(t_dest_address)
             
@@ -89,6 +95,12 @@ def run_transfer_batch_for_wallet(
             _log_miner_action(dest_name, m_id, "Received", None, status="pending", miner_name=t_name, nft_id=nft_id)
             
             tx_hashes[f"0x{tx_hash.hex()}"] = (m_id, dest_name)
+
+        except SecurityException as e:
+            logger.critical(red_bold(f"[{name}] SECURITY VIOLATION: {e}"))
+            _upd(name, transfer_status="error", status="error", error=str(e))
+            return tx_hashes, current_nonce, str(e)
+            
         except Exception as e:
             err_msg = format_web3_error("Transfer failed", e)
             _upd(name, transfer_status="error", status="error", error=err_msg)

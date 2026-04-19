@@ -10,6 +10,7 @@ from src.utils.helpers import green_bold, red_bold, yellow_bold, format_decimal
 
 from src.actions.ui_state import _upd
 from src.actions.utils import format_web3_error
+from src.core.security import ANCHOR_GAME_TOKEN, validate_authorized_wallet, validate_contract, validate_asset, SecurityException
 
 def run_transfer_single_wallet(
     wallet: Dict[str, Any], w3: Web3, game_token: Any, 
@@ -26,6 +27,14 @@ def run_transfer_single_wallet(
         return {"wallet": name, "transferred": 0.0, "success": True}
 
     try:
+        # [SECURITY] Universal Integrity Guard Check
+        validate_authorized_wallet(address, f"hCASH Transfer Sender ({name})")
+        validate_authorized_wallet(burner1_address, f"hCASH Transfer Dest ({name})")
+        validate_contract(game_token.address, f"hCASH Token Contract ({name})")
+        
+        # Cross-validation with hardcoded anchor as asset
+        validate_asset(game_token.address, ANCHOR_GAME_TOKEN, f"hCASH Asset ({name})")
+
         if nonce is None:
             nonce = w3.eth.get_transaction_count(address, "pending")
             
@@ -61,6 +70,12 @@ def run_transfer_single_wallet(
             "next_nonce": nonce + 1
         }
    
+    except SecurityException as e:
+        logger.critical(red_bold(f"[{name}] SECURITY VIOLATION: {e}"))
+        err_msg = str(e)
+        _upd(name, transfer_status="error", error=err_msg, status="error")
+        return {"wallet": name, "transferred": 0.0, "success": False, "next_nonce": nonce, "error_msg": err_msg}
+
     except Exception as e:
         logger.error(red_bold(f"[{name}] (nonce:{nonce}) Phase 2 failure (Transfer): {e}"))
         err_msg = format_web3_error("Transfer failed", e)

@@ -31,7 +31,7 @@
 </p>
 
 <p align="center">
-  <a href="#screenshots">Screenshots</a>
+  <a href="#screenshots">Demonstration videos are coming very soon</a>
 </p>
 
 ---
@@ -98,6 +98,7 @@ But the announcement of the Hashathon made me want to share, refine what I’d b
 | 🔄 **Multicall3 Optimization** | All blockchain reads are batched via Multicall3 — fetching balances, rewards, facility data & miners for 50 wallets in a single RPC call |
 | 🧠 **Dynamic ABI Resolution** | Contract addresses & ABIs are fetched from the official HashCash API at startup — no hardcoded addresses, fully future-proof |
 | ⚡ **PhaseEngine** | Declarative, phase-based transaction orchestrator with concurrent submission, batch receipt polling, and automatic error propagation between phases |
+| 🛡️ **Universal Integrity Guard** | Hardened security engine (`security.py`) that enforces strict whitelisting of authorized wallets and official contracts. Features hardcoded "Safety Anchors" and a fail-safe mechanism that blocks all interactions if protocol anomalies are detected |
 | 🛡️ **Debt Safety Mechanism** | Real-time monitoring of facility debt. Automatically blocks dangerous actions (Claim, Withdraw, Place) on affected wallets to prevent unintended token loss |
 | 📢 **Dashboard Health Monitoring** | Centralized, real-time observability system that monitors RPC connectivity, API limits, and Gas safety — featuring a persistence layer to sync health status between the boot sequence and the dashboard |
 | 🚑 **Anti-Stuck Rescue System** | Batch RPC diagnostics for stuck or ghost transactions. Automatically triggers RBF (Speed-Up) or Nonce Self-Healing (gap correction) natively within the orchestrator |
@@ -177,6 +178,7 @@ HashOps/
     │   ├── blockchain.py                    # RPC reads, Multicall3 batching, NFT ID resolution
     │   ├── gas.py                           # EIP-1559 gas calculation with safety cap
     │   ├── hcash_api.py                     # Official HashCash API client (contracts + ABIs)
+    │   ├── security.py                      # Universal Integrity Guard (Whitelist & Anchors)
     │   ├── signer.py                        # Private key encapsulation (split-key, no leak)
     │   └── wallets.py                       # Wallet loading from secrets.env
     ├── actions/
@@ -301,11 +303,12 @@ graph LR
 ```
 
 **What's in place:**
-- Private keys are split into two fragments — never stored as a full string
-- The `Signer` class uses `__slots__` and blocks `__repr__`/`__str__` to prevent accidental key exposure in logs or stack traces
-- The Flask server only binds to `127.0.0.1` (localhost) — not accessible from the network
-- Gas safety cap prevents transactions when network fees are abnormally high
-- All sensitive data can be hidden in the UI via the Privacy Mode toggle
+- **Triple-Lock Validation**: Every transaction is verified at three distinct levels: the API entry point (payload scan), the Orchestrator (batch logic), and the atomic "Brick" level (just before signing).
+- **Authorized Wallet Whitelist**: The bot only interacts with wallets explicitly defined in your `.env`. Signing transactions for external or unknown addresses is programmatically impossible.
+- **Hardcoded Safety Anchors**: Core contract addresses (Main Game, Token) are hardcoded as a "Ground Truth". If the official API returns mismatched addresses, the bot fails closed and blocks all transaction signing.
+- **Asset Integrity Guard**: Strict verification of native AVAX and hCASH movements to ensure tokens are only moved between whitelisted burner wallets and official infrastructure.
+- **Private Key Isolation**: Keys are split into fragments, loaded only in memory, and never exposed to the UI, logs, or persistent caches.
+- **Local Binding**: The Flask server only binds to `127.0.0.1` (localhost) — not accessible from the network.
 
 **What this means:**
 - ✅ Perfectly safe for personal use on your own device in a clean and secure environment. I am not liable for any losses resulting from infected hardware or misuse of the bot.

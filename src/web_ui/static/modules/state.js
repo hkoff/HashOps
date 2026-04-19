@@ -19,6 +19,7 @@ const state = {
 
   /* Component: System Alerts (Banners) ─────────────────────────── */
   alerts: {},              // { id: { type, title, message, section, persistent } }
+  dismissedAlerts: new Set(JSON.parse(localStorage.getItem('dismissed_alerts') || '[]')),
 
   /* Per-wallet runtime data ────────────────────────────────────── */
   walletStatuses: {},      // { walletName: 'idle'|'running'|'success'|'error'|... }
@@ -56,6 +57,13 @@ const state = {
     hcash_logo_url: "https://cdn.popularhost.net/hashcash/hcash_token.png",
     avax_logo_url: "https://raw.githubusercontent.com/lifinance/types/main/src/assets/icons/chains/avalanche.svg"
   },
+};
+
+/** 
+ * Returns true if the app is currently in a high-security lock state (e.g., an un-dismissed global error alert is active).
+ */
+state.getSecurityLock = function() {
+  return Object.values(state.alerts).some(a => a.type === 'error' && a.section === 'global');
 };
 
 // Power multiplier: the smart-contract encodes power in units of 100 W

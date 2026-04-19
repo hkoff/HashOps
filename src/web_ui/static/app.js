@@ -68,6 +68,9 @@ window.initDashboard = async function (preloadedResults = null) {
     await connectSSE();
     await pollStatus();
 
+    // 5. Global UI State Check
+    if (typeof updateInteractiveState === 'function') updateInteractiveState();
+
     appendLog(new Date().toLocaleTimeString(), '\u001b[95m── Dashboard Ready ──\u001b[0m');
   } catch (err) {
     showToast('Dashboard initialization failed', 'error');

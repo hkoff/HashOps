@@ -11,6 +11,7 @@ from src.utils.helpers import green_bold, red_bold, format_decimal
 from src.actions.ui_state import _upd, get_wallet_name
 from src.actions.utils import format_web3_error
 from src.utils.helpers import yellow_bold
+from src.core.security import validate_authorized_wallet, validate_contract, SecurityException
 
 def process_claim_receipt(
     receipt: Any, game_token: Any
@@ -61,6 +62,11 @@ def run_claim_single_wallet(
     address = wallet["address"]
     
     try:
+        # [SECURITY] Universal Integrity Guard Check
+        validate_authorized_wallet(address, f"Claimer ({name})")
+        validate_contract(game_main.address, f"Game Main ({name})")
+        validate_contract(game_token.address, f"Game Token ({name})")
+
         if nonce is None:
             nonce = w3.eth.get_transaction_count(address, "pending")
             
@@ -84,6 +90,12 @@ def run_claim_single_wallet(
         _upd(name, claim_tx=f"{BLOCK_EXPLORER_URL}/tx/{tx_hex}")
 
         return {"wallet": name, "tx_hash": tx_hex, "success": True, "next_nonce": nonce + 1}
+
+    except SecurityException as e:
+        logger.critical(red_bold(f"[{name}] SECURITY VIOLATION: {e}"))
+        err_msg = str(e)
+        _upd(name, claim_status="error", status="error", error=err_msg)
+        return {"wallet": name, "claimed": 0.0, "success": False, "error": err_msg, "new_balance": initial_balance, "next_nonce": nonce, "error_msg": err_msg}
 
     except Exception as e:
         err_msg = format_web3_error("Claim failed", e)

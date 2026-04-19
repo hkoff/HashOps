@@ -100,6 +100,7 @@ function openMinerModal() {
       <div class="mm-wallet-title">
         <span>${w.name}</span> 
         <span class="mov-wallet-addr privacy-data"><a href="${state.config.debank_url}${w.address}" target="_blank" onclick="event.stopPropagation()" class="addr-link" title="Profil Debank"><span class="privacy-data">${short}</span></a></span>
+        ${renderBulkActionsHtml(w.name)}
       </div>
       <div class="mm-item-list" id="list-${w.name}"></div>
     `;
@@ -166,6 +167,7 @@ function renderSingleWalletMinerUI(wname, container) {
       <div class="mm-wallet-title">
         <div class="mm-grid-title">Facility Grid - ${wname}</div>
         <div class="mov-wallet-addr">${short}</div>
+        ${renderBulkActionsHtml(wname)}
       </div>
       <div class="mm-facility-grid" style="--grid-cols: ${maxX}">
   `;
@@ -328,6 +330,132 @@ window.toggleMinerPlace = function (wname, mid) {
 };
 
 /* ─────────────────────────────────────────────────────────────────
+   BULK ACTIONS
+   ───────────────────────────────────────────────────────────────── */
+
+window.renderBulkActionsHtml = function(wname) {
+  // Only show buttons if there are NFTs in the wallet
+  const totalItems = countAvailableItems([wname]);
+  if (totalItems === 0) return "";
+
+  const walletOptions = state.wallets.map(optW => {
+    const addrMask = state.privacyEnabled ? '0x...' : (optW.address.slice(0, 6) + '...' + optW.address.slice(-4));
+    return `<option value="${optW.address}">${optW.name} - ${addrMask}</option>`;
+  }).join('');
+
+  return `
+    <div class="mm-bulk-actions">
+      <button class="mm-ap-btn withdraw mm-bulk-btn" onclick="bulkToggleWithdraw('${wname}')" title="Toggle Withdraw for all placed NFTs">
+        <span class="mm-ap-btn-label">Withdraw All</span>
+      </button>
+      
+      <select name="Wallet Destination" class="mm-ap-select mm-bulk-select" onchange="bulkSetTransfer('${wname}', this.value); this.value='';" title="Transfer all NFTs to...">
+        <option value="">-- Transfer All --</option>
+        ${walletOptions}
+      </select>
+
+      <button class="mm-ap-btn place mm-bulk-btn" onclick="bulkTogglePlace('${wname}')" title="Toggle Place for all NFTs">
+        <span class="mm-ap-btn-label">Place All</span>
+      </button>
+    </div>
+  `;
+};
+
+window.bulkToggleWithdraw = function(wname) {
+  const w = state.wallets.find(x => x.name === wname);
+  const info = state.walletMiners[w.address.toLowerCase()];
+  if (!info || !info.placed) return;
+
+  let anyNotWithdrawing = info.placed.some(m => !getMinerActionConfig(wname, m.id).withdraw);
+
+  info.placed.forEach(m => {
+    const cfg = getMinerActionConfig(wname, m.id, m, 'placed');
+    cfg.withdraw = anyNotWithdrawing;
+    if (!cfg.withdraw) { cfg.transferDest = ""; cfg.autoPlace = false; }
+    syncMinerControlsUI(wname, m.id);
+  });
+  updateMinerModalSimulation();
+};
+
+window.bulkSetTransfer = function(wname, dest) {
+  if (!dest) return;
+  const w = state.wallets.find(x => x.name === wname);
+  const info = state.walletMiners[w.address.toLowerCase()];
+  if (!info) return;
+
+  // Placed
+  (info.placed || []).forEach(m => {
+    const cfg = getMinerActionConfig(wname, m.id, m, 'placed');
+    cfg.transferDest = dest;
+    cfg.withdraw = true;
+    syncMinerControlsUI(wname, m.id);
+  });
+
+  // Owned 
+  if (info.owned) {
+      Object.entries(info.owned).forEach(([cIdx, ids]) => {
+          const typeData = state.minerTypes[cIdx] || {};
+          let nftContract = typeData.nftContract;
+          if (!nftContract && state._nftToType) {
+              for (const [key, val] of Object.entries(state._nftToType)) {
+                  if (val.idx == cIdx) { nftContract = key; break; }
+              }
+          }
+          ids.forEach(tokenId => {
+              const m = { id: tokenId, gameId: null, nftTokenId: tokenId, cIdx, power: typeData.power, hashrate: typeData.hashrate, nftContract };
+              const cfg = getMinerActionConfig(wname, tokenId, m, 'owned');
+              cfg.transferDest = dest;
+              syncMinerControlsUI(wname, tokenId);
+          });
+      });
+  }
+  updateMinerModalSimulation();
+};
+
+window.bulkTogglePlace = function(wname) {
+  const w = state.wallets.find(x => x.name === wname);
+  const info = state.walletMiners[w.address.toLowerCase()];
+  if (!info) return;
+
+  let anyNotPlacing = false;
+  if (info.placed && info.placed.some(m => !getMinerActionConfig(wname, m.id).autoPlace)) anyNotPlacing = true;
+  if (!anyNotPlacing && info.owned) {
+      Object.values(info.owned).forEach(ids => {
+          if (ids.some(tid => !getMinerActionConfig(wname, tid).autoPlace)) anyNotPlacing = true;
+      });
+  }
+
+  (info.placed || []).forEach(m => {
+    const cfg = getMinerActionConfig(wname, m.id, m, 'placed');
+    if (anyNotPlacing) {
+        if (!cfg.withdraw) cfg.withdraw = true;
+        // Logic check: if no transfer, placing back on same spot is blocked in single toggle but for bulk, we apply and let simulation/validation show the impact.
+    }
+    cfg.autoPlace = anyNotPlacing;
+    syncMinerControlsUI(wname, m.id);
+  });
+
+  if (info.owned) {
+      Object.entries(info.owned).forEach(([cIdx, ids]) => {
+          const typeData = state.minerTypes[cIdx] || {};
+          let nftContract = typeData.nftContract;
+          if (!nftContract && state._nftToType) {
+              for (const [key, val] of Object.entries(state._nftToType)) {
+                  if (val.idx == cIdx) { nftContract = key; break; }
+              }
+          }
+          ids.forEach(tokenId => {
+              const m = { id: tokenId, gameId: null, nftTokenId: tokenId, cIdx, power: typeData.power, hashrate: typeData.hashrate, nftContract };
+              const cfg = getMinerActionConfig(wname, tokenId, m, 'owned');
+              cfg.autoPlace = anyNotPlacing;
+              syncMinerControlsUI(wname, tokenId);
+          });
+      });
+  }
+  updateMinerModalSimulation();
+};
+
+/* ─────────────────────────────────────────────────────────────────
    MINER CONTROLS RENDERING
    ───────────────────────────────────────────────────────────────── */
 
@@ -373,7 +501,7 @@ function renderMinerControlsHtml(wname, m, type, isPanel = false) {
         </div>
       ` : ''}
       <div class="mm-ap-group">
-        <select class="mm-ap-select ${cfg.transferDest ? 'active' : ''}" onchange="setMinerTransfer('${wname}', '${m.id}', this.value)">
+        <select name="Wallet Destination" class="mm-ap-select ${cfg.transferDest ? 'active' : ''}" onchange="setMinerTransfer('${wname}', '${m.id}', this.value)">
           <option value="">-- Transfer --</option>
           ${walletOptions}
         </select>
@@ -516,12 +644,33 @@ window.updateMinerModalSimulation = function () {
 
     const errBox = document.getElementById('miner-modal-error');
     const btnExec = document.getElementById('btn-exec-miner-batch');
-    if (!hasAction) {
-      errBox.textContent = ''; btnExec.disabled = true;
+
+    const isLocked = typeof state.getSecurityLock === 'function' ? state.getSecurityLock() : false;
+
+    if (isLocked) {
+      errBox.textContent = '❌ Security Lock: Action blocked by Universal Guard.';
+      if (btnExec) {
+        btnExec.disabled = true;
+        btnExec.classList.add('security-blocked');
+      }
+    } else if (!hasAction) {
+      errBox.textContent = ''; 
+      if (btnExec) {
+        btnExec.disabled = true;
+        btnExec.classList.remove('security-blocked');
+      }
     } else if (hasError) {
-      errBox.textContent = '❌ Facility limits exceeded for one or more wallets.'; btnExec.disabled = true;
+      errBox.textContent = '❌ Facility limits exceeded for one or more wallets.'; 
+      if (btnExec) {
+        btnExec.disabled = true;
+        btnExec.classList.remove('security-blocked');
+      }
     } else {
-      errBox.textContent = ''; btnExec.disabled = false;
+      errBox.textContent = ''; 
+      if (btnExec) {
+        btnExec.disabled = false;
+        btnExec.classList.remove('security-blocked');
+      }
     }
   } catch (e) {
     appendLog('', `\u001b[31m[Modal] Simulation error: ${e.message || e}\u001b[0m`, 'ERROR');

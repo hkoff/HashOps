@@ -14,6 +14,8 @@ from src.actions.utils import get_batch_nonces
 from src.actions.ui_state import _upd, get_wallet_details, _set_avax_tx
 from src.actions.bricks.transfer_avax import run_transfer_avax
 from src.actions.phase_engine import PhaseEngine, Phase, SubmissionResult
+from src.core.security import ANCHOR_AVAX_TOKEN, validate_authorized_wallet, validate_contract, validate_asset, SecurityException
+from src.config import AVAX_TOKEN_ADDRESS
 
 class BatchGasPhaser:
     def __init__(self, w3, engine, gas_params, main_wallet, wallet_nonces):
@@ -120,6 +122,19 @@ def run_dispatch_gas(target_wallets: List[Dict[str, Any]], burner1_address: str)
     game_main  = get_game_main_contract(w3)
     game_token = get_game_token_contract(w3)
     
+    # --- [SECURITY] Verification ---
+    try:
+        validate_authorized_wallet(burner1_address, "Main Wallet (Burner 1)")
+        for w in target_wallets:
+            validate_authorized_wallet(w["address"], f"Participant Wallet ({w['name']})")
+        validate_contract(game_main.address, "Core Game Main")
+        validate_contract(game_token.address, "Core hCASH Token")
+        validate_asset(AVAX_TOKEN_ADDRESS, ANCHOR_AVAX_TOKEN, "AVAX Asset Native Anchor")
+
+    except SecurityException as e:
+        logger.critical(red_bold(f"[SECURITY] Dispatch aborted: {e}"))
+        return {"success": False, "error": str(e), "status": "error"}
+
     # 2. Balance retrieval (batch_data contains "avax_balance")
     addresses = [w["address"] for w in target_wallets]
     batch_data = get_batch_wallets_miners_info(w3, addresses, game_main, game_token, {})

@@ -12,6 +12,7 @@ from src.core.blockchain import get_nft_contract, get_miner_contract_address
 
 from src.actions.ui_state import _upd, _log_miner_action
 from src.actions.utils import format_web3_error
+from src.core.security import validate_authorized_wallet, validate_contract, SecurityException
 
 def get_empty_coordinates(max_x: int, max_y: int, max_m: int, placed_coords: set) -> tuple:
     """
@@ -104,6 +105,11 @@ def run_place_batch_for_wallet(
                 logger.error(red_bold(f"[{name}] Unable to determine NFT contract for {p_name} #{nft_id}. Skipping."))
                 continue
 
+            # [SECURITY] Universal Integrity Guard Check
+            validate_authorized_wallet(address, f"Place Owner ({name})")
+            validate_contract(t_nft, f"NFT Contract ({name})")
+            validate_contract(game_main.address, f"Game Main ({name})")
+
             # --- Auto-Approve Check ---
             if t_nft not in approved_nfts:
                 nft_c = get_nft_contract(w3, t_nft)
@@ -145,6 +151,12 @@ def run_place_batch_for_wallet(
             _log_miner_action(name, m_id, "Place", url_tx, status="pending", miner_name=p_name, nft_id=nft_id)
             
             tx_hashes[f"0x{tx_hash.hex()}"] = m_id
+            
+        except SecurityException as e:
+            logger.critical(red_bold(f"[{name}] SECURITY VIOLATION: {e}"))
+            err_msg = str(e)
+            _upd(name, place_status="error", status="error", error=err_msg)
+            return tx_hashes, base_nonce, err_msg
             
         except Exception as e:
             err_msg = format_web3_error("Place failed", e)

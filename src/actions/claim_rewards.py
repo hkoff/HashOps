@@ -14,6 +14,7 @@ from src.actions.ui_state import _init_detail, _upd
 from src.actions.bricks.claim_hcash import run_claim_single_wallet, process_claim_receipt
 from src.actions.bricks.transfer_hcash import run_transfer_single_wallet
 from src.actions.phase_engine import PhaseEngine, Phase, SubmissionResult
+from src.core.security import validate_authorized_wallet, validate_contract, SecurityException
 
 class BatchClaimPhaser:
     def __init__(self, w3, game_main, game_token, engine, gas_params, eligible, burner1_address, wallet_nonces):
@@ -172,6 +173,17 @@ def run_claim_all(target_wallets: List[Dict[str, Any]], burner1_address: str) ->
     w3 = get_web3()
     game_main  = get_game_main_contract(w3)
     game_token = get_game_token_contract(w3)
+    
+    # --- [SECURITY] Verification ---
+    try:
+        validate_authorized_wallet(burner1_address, "Main Wallet (Burner 1)")
+        for w in target_wallets:
+            validate_authorized_wallet(w["address"], f"Claim Participant ({w['name']})")
+        validate_contract(game_main.address, "Core Game Main")
+        validate_contract(game_token.address, "Core hCASH Token")
+    except SecurityException as e:
+        logger.critical(red_bold(f"[SECURITY] Claim aborted: {e}"))
+        return {"success": False, "error": str(e), "status": "error"}
     
     # --- PHASE 0: BATCH VERIFICATION (MULTICALL3) ---
     logger.debug(magenta_bold("══════════════════════════════════════════════"))

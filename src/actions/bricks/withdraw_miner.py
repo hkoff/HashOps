@@ -10,6 +10,7 @@ from src.utils.helpers import red_bold, yellow_bold, green_bold
 
 from src.actions.ui_state import _upd, _log_miner_action
 from src.actions.utils import format_web3_error
+from src.core.security import validate_authorized_wallet, validate_contract, SecurityException
 
 def run_withdraw_batch_for_wallet(
     wallet: Dict[str, Any], withdraws: List[Dict[str, Any]], w3: Web3, 
@@ -33,6 +34,10 @@ def run_withdraw_batch_for_wallet(
             nft_id = m_info.get("nft_token_id")
             m_name = m_info.get("name", "Miner")
 
+            # [SECURITY] Universal Integrity Guard Check
+            validate_authorized_wallet(address, f"Withdraw Owner ({name})")
+            validate_contract(game_main.address, f"Game Main ({name})")
+
             logger.info(yellow_bold(f"[{name}] (nonce:{current_nonce}) Sending Withdraw tx for {m_name} #{m_id} (NFT #{nft_id})..."))
             
             tx = game_main.functions.withdrawMiner(m_id).build_transaction({
@@ -50,6 +55,13 @@ def run_withdraw_batch_for_wallet(
             _log_miner_action(name, m_id, "Withdraw", url_tx, status="pending", miner_name=m_name, nft_id=nft_id)
             
             tx_hashes[f"0x{tx_hash.hex()}"] = m_id
+
+        except SecurityException as e:
+            logger.critical(red_bold(f"[{name}] SECURITY VIOLATION: {e}"))
+            err_msg = str(e)
+            _upd(name, withdraw_status="error", status="error", error=err_msg)
+            return tx_hashes, current_nonce, err_msg
+            
         except Exception as e:
             err_msg = format_web3_error("Withdraw failed", e)
             _upd(name, withdraw_status="error", status="error", error=err_msg)

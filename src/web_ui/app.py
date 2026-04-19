@@ -49,6 +49,7 @@ from src.actions.dispatch_gas import run_dispatch_gas
 from src.actions.batch_handle_nft_miners import run_all_miners_batches
 from src.web_ui.sse import _broadcast, get_sse_response
 from src.actions.ui_alerts import get_active_alerts
+from src.core.security import initialize_security, validate_authorized_wallet, validate_contract, SecurityException
 
 # Ethereum address regex (0x + 40 hex chars)
 _ETH_ADDR_RE = re.compile(r"^0x[0-9a-fA-F]{40}$")
@@ -156,13 +157,8 @@ _miner_types: dict    = {}      # Miner type cache {idx: {name, nft_name, ...}}
 _cached_batch_data: dict = {}
 _batch_data_lock = threading.Lock()
 
-def init_app_context(wallets, w3, game_main, game_token, burner1_address, miner_types=None):
-    """Inject blockchain references into the Flask API layer.
-
-    Called once by main.py after Web3 and contract objects are ready.
-    These references are read-only from the API handlers' perspective;
-    mutations happen only inside action orchestrators.
-    """
+def init_app_context(wallets, w3, game_main, game_token, burner1_address, miner_types=None, registry=None):
+    """Inject blockchain references and initialize security."""
     global _wallets, _w3, _game_main, _game_token, _burner1_address, _miner_types
     _wallets         = wallets
     _w3              = w3
@@ -170,6 +166,10 @@ def init_app_context(wallets, w3, game_main, game_token, burner1_address, miner_
     _game_token      = game_token
     _burner1_address = burner1_address
     _miner_types     = miner_types or {}
+    
+    # Initialize Universal Integrity & Transaction Guard
+    if registry:
+        initialize_security(wallets, registry)
 
 def set_cached_batch_data(data: dict) -> None:
     """Populate the cached batch data from an external caller (e.g. main.py at init)."""
@@ -481,6 +481,38 @@ def api_miners_cache_refresh():
         logger.error(red_bold(f"[API] Unexpected error during cache refresh: {e}"))
         return jsonify({"error": str(e)}), 500
 
+def _validate_payload_security(data: dict) -> None:
+    """
+    Performs a deep scan of the action payload to ensure all destinations and contracts are whitelisted. 
+    Raises SecurityException on violation.
+    """
+    action = data.get("action")
+    
+    # 1. Validate 'burner1_address' for global actions
+    if burner := data.get("burner1_address"):
+        validate_authorized_wallet(burner, "Global Destination")
+
+    # 2. Validate 'wallets_actions' for Batch Miner actions
+    if action == config.ACTION_KEY_BATCH_MINERS:
+        wallets_actions = data.get("wallets_actions", {})
+        for w_name, acts in wallets_actions.items():
+            if not isinstance(acts, dict): continue
+            
+            # Check Transfers
+            for t in acts.get("transfers", []):
+                validate_authorized_wallet(t.get("dest"), f"NFT Transfer Dest ({w_name})")
+                
+                # Check NFT contract if provided
+                if nft_addr := t.get("nft"):
+                    if nft_addr.lower() != "undefined" and nft_addr != config.NULL_ADDRESS:
+                        validate_contract(nft_addr, f"NFT Contract ({w_name})")
+            
+            # Check Places (target_nft)
+            for p in acts.get("places", []):
+                if nft_addr := p.get("nft"):
+                    if nft_addr.lower() != "undefined" and nft_addr != config.NULL_ADDRESS:
+                        validate_contract(nft_addr, f"Place Contract ({w_name})")
+
 @app.route("/api/run", methods=["POST"])
 def api_run():
     """Start an asynchronous blockchain action for selected wallets.
@@ -515,6 +547,14 @@ def api_run():
             return jsonify({"error": "Action already in progress"}), 409
         _app_state["status"] = "running"
         _app_state["action"] = action
+
+    # SECURITY SCALE: Universal Integrity & Transaction Guard
+    # We perform a synchronous pre-check of the payload before even starting the thread.
+    try:
+        _validate_payload_security(data)
+    except SecurityException as e:
+        # State remains idle, we don't start anything.
+        return jsonify({"error": str(e)}), 403
 
     # Clear all previous action data before starting a new one to ensure a clean state
     logger.info(yellow_bold(f"[API] 🧹 Clearing global UI state for new action: {action}"))

@@ -20,6 +20,7 @@ from src.actions.bricks.place_miner import run_place_batch_for_wallet, get_facil
 from src.actions.bricks.claim_hcash import process_claim_receipt     
 
 from src.actions.phase_engine import PhaseEngine, Phase, SubmissionResult
+from src.core.security import validate_authorized_wallet, validate_contract, SecurityException
 
 class BatchMinersPhaser:
     """Encapsulates the methods for each phase to clean up the main entry point."""
@@ -358,6 +359,38 @@ def run_all_miners_batches(target_wallets: List[Dict[str, Any]], data: Dict[str,
 
     # --- NONCE BATCH RPC ---
     target_addrs = [w["address"] for w in target_wallets]
+    
+    # --- [SECURITY] Payload Deep Scan ---
+    # Final validation before initializing the engine
+    try:
+        # Validate all participating signers
+        for w in target_wallets:
+            validate_authorized_wallet(w["address"], f"Batch Participant ({w['name']})")
+
+        for wn, w_actions in data.items():
+            if not isinstance(w_actions, dict): continue
+            
+            # Check Transfers
+            for t in w_actions.get("transfers", []):
+                validate_authorized_wallet(t.get("dest"), f"Transfer Dest ({wn})")
+                if nft_addr := t.get("nft"):
+                    if nft_addr.lower() != "undefined" and nft_addr != NULL_ADDRESS:
+                        validate_contract(nft_addr, f"NFT Contract ({wn})")
+
+            # Check Places
+            for p in w_actions.get("places", []):
+                if nft_addr := p.get("nft"):
+                    if nft_addr.lower() != "undefined" and nft_addr != NULL_ADDRESS:
+                        validate_contract(nft_addr, f"Place Contract ({wn})")
+        
+        # Verify Game Main Contract (Safety Anchor)
+        validate_contract(game_main.address, "Core Game Main")
+        validate_contract(game_token.address, "Core hCASH Token")
+
+    except SecurityException as e:
+        logger.critical(red_bold(f"[SECURITY] Batch aborted: {e}"))
+        return {"success": False, "error": str(e), "status": "error"}
+
     wallet_nonces = get_batch_nonces(w3, target_addrs)
 
     # --- ENGINE & CONTEXT ---

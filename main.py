@@ -240,7 +240,7 @@ def initialization_sequence():
         init_app_context(
             wallets=wallets, w3=w3, game_main=game_main,
             game_token=game_token, burner1_address=burner1["address"],
-            miner_types=miner_types
+            miner_types=miner_types, registry=registry
         )
 
         # Populate debt detection cache from the data we already have

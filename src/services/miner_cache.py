@@ -12,6 +12,7 @@ from web3 import Web3
 from src.config import CACHE_FILE_PATH
 from src.services.logger_setup import logger
 from src.utils.helpers import green_bold, yellow_bold, cyan_bold, red_bold, magenta_bold
+from src.core.security import update_authorized_contracts
 
 def _empty_cache() -> Dict[str, Any]:
     return {"cached_max_index": 0, "last_updated": None, "miners": {}}
@@ -64,6 +65,17 @@ def refresh_miner_cache_if_needed(
         logger.info(green_bold(
             f"[CACHE] {m_count} miners + {e_count} external NFTs loaded from disk ✓"
         ))
+        
+        # [SECURITY] Even if we skip the full cache refresh, we MUST fetch the registry to feed the Universal Integrity Guard at boot.
+        try:
+            from src.core.hcash_api import get_client
+            api_client = get_client()
+            registry = api_client.fetch_contracts()
+            update_authorized_contracts(registry)
+        except Exception as e:
+            logger.error(red_bold(f"[SECURITY] Critical error: failed to fetch registry at boot: {e}"))
+            # We don't block boot, but validation will fail later if anchors aren't met.
+            
         return cached_miners
 
     if not force and not cached_miners:
@@ -75,6 +87,9 @@ def refresh_miner_cache_if_needed(
     from src.core.hcash_api import get_client
     api_client = get_client()
     registry   = api_client.fetch_contracts()
+
+    # [SECURITY] Update authorized contracts with the fresh registry
+    update_authorized_contracts(registry)
 
     miner_nfts   = registry.get("by_category", {}).get("miner_nft", [])
     external_nfts = registry.get("by_category", {}).get("external_nft", [])

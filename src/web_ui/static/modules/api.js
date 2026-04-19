@@ -205,9 +205,7 @@ function setAppStatus(status) {
  */
 function setRunning(val) {
   state.running = val;
-  // Locked state includes active execution OR post-action sync period
-  const isLocked = state.running || state.waitingForSync;
-  document.querySelectorAll('.action-btn').forEach(btn => { if (!btn.dataset.soon) btn.disabled = isLocked; });
+  if (typeof updateInteractiveState === 'function') updateInteractiveState();
   if (val) { clearTimeout(state.pollInterval); state.pollInterval = setTimeout(pollStatus, 600); }
 }
 
