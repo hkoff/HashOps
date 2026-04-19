@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>HashOps - Dashboard</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+
+<body>
+  <!-- ── Premium Loader Overlay ──────────────────────────────── -->
+  <div id="loader-overlay">
+    <div class="loader-mesh">
+      <div class="blob blob-1"></div>
+      <div class="blob blob-2"></div>
+      <div class="blob blob-3"></div>
+      <div class="blob blob-4"></div>
+    </div>
+    <div id="loader-tech-grid"></div>
+    <div class="loader-content">
+      <div class="loader-logo-container">
+        <img src="{{ hcash_logo_url }}" class="loader-logo-img" alt="Logo">
+      </div>
+      <div class="loader-title">HashOps</div>
+      <div class="loader-status-text">Initializing...</div>
+      <div class="loader-progress-wrapper">
+        <div class="loader-progress-bar"></div>
+      </div>
+      <div class="loader-details">
+        <!-- Dynamic steps -->
+      </div>
+      <div id="loader-start-button-wrapper" class="invisible">
+        <button id="loader-start-btn">ENTER DASHBOARD</button>
+      </div>
+    </div>
+    <div id="loader-miners-tray">
+      <div class="miners-track"></div>
+    </div>
+    <div class="loader-welcome">
+      <div class="welcome-text">Welcome back, Miner</div>
+      <div class="welcome-subtext">Initialization Complete</div>
+    </div>
+  </div>
+
+  <div class="app">
+
+    <!-- ── Header ──────────────────────────────────────────────── -->
+    <header>
+      <span class="logo">
+        <img src="{{ hcash_logo_url }}" class="logo-img" alt=""> HashOps - Streamline your mining operations
+      </span>
+      <a href="https://hashcash.club/" target="_blank"><span class="header-badge violet">Club HashCash</span></a>
+      <span class="header-spacer"></span>
+      <button class="btn-privacy" id="btn-toggle-random" title="Demo Mode (randomize data)"
+        onclick="toggleRandomPrivacy()">
+        <svg-icon name="refresh" id="random-icon" class="svg-size-xl"></svg-icon>
+      </button>
+      <button class="btn-privacy" id="btn-toggle-privacy" title="Privacy Mode (mask balances & addresses)">
+        <svg-icon name="eye" id="privacy-icon" class="svg-size-xl"></svg-icon>
+      </button>
+      <div class="status-pill">
+        <div class="status-dot idle" id="status-dot"></div>
+        <span id="status-text">Idle</span>
+      </div>
+    </header>
+
+    <!-- ── Sidebar ──────────────────────────────────────────────── -->
+    <aside class="sidebar">
+      <div class="section-title">Wallets & Facilities</div>
+      <button class="select-all-btn" id="select-all-btn">Deselect all</button>
+      <div class="wallets-list" id="wallets-list">
+        <div class="loading-msg" id="sidebar-loading">Loading wallets...</div>
+      </div>
+      <div class="sidebar-divider"></div>
+      <div class="section-title">Actions</div>
+      <div class="actions-list">
+        <button class="action-btn primary" id="btn-claim">
+          <span class="action-icon">💎</span>
+          <div class="action-label">
+            <span>{{ action_names['claim'] }}</span>
+            <div class="action-datas" id="claim-totals" title="Global total for all wallets">
+              <div>Pending - <span class="action-datas-nbr" id="claim-total-pending">0.00</span></div>
+              <div>Net - <span class="action-datas-nbr" id="claim-total-net">0.00</span></div>
+            </div>
+            <div class="action-sub">Claim from selected wallets and transfer rewards to the main</div>
+          </div>
+        </button>
+        <button class="action-btn" id="btn-manage-miners">
+          <span class="action-icon">🛠️</span>
+          <div class="action-label">
+            <div>{{ action_names['batch_miners'] }}</div>
+            <div class="action-sub">Bulk Withdraw, Transfer & Place</div>
+          </div>
+        </button>
+
+        <button class="action-btn" id="btn-dispatch-gas">
+          <span class="action-icon">⛽</span>
+          <div class="action-label">
+            <div>{{ action_names['dispatch_gas'] }}</div>
+            <div class="action-sub">Smart AVAX balancing between wallets</div>
+          </div>
+        </button>
+      </div>
+    </aside>
+
+    <!-- ── Main content ─────────────────────────────────────────── -->
+    <main class="main-panel">
+
+      <!-- SECTION: REFRESH ACTIONS BAR (Sticky at top) -->
+      <div class="refresh-bar">
+        <div class="refresh-group">
+          <span class="refresh-label">
+            <svg-icon name="refresh" class="svg-align svg-size-sm"></svg-icon>
+            Refresh
+          </span>
+          <button class="refbar-btn" id="refbar-wallets-btn" onclick="refreshAllMiners()"
+            title="Recalculate balances, NFTs, and facility for all wallets">Wallets</button>
+          <button class="refbar-btn" id="refbar-cache-btn" onclick="forceRefreshMinersCache()"
+            title="Force update miner types names/images (Cache)">Miners Cache</button>
+          <div class="refbar-sep"></div>
+          <button class="refbar-btn small" id="refbar-gas-btn" onclick="checkGasPrice()"
+            title="Check current gas on Avalanche">Gas</button>
+        </div>
+      </div>
+
+      <!-- Global Alerts Tray -->
+      <div id="global-alerts-tray" class="alerts-tray"></div>
+
+      <!-- Miners Inventory -->
+      <div class="miners-overview-section" id="miners-overview-section">
+        <div class="panel-header-toggle" onclick="toggleMainPanel('miners')">
+          <span class="toggle-icon rotated" id="toggle-miners-icon">▶</span>
+          <span class="panel-title">Inventory</span>
+          <div class="header-actions" onclick="event.stopPropagation()">
+            <button class="toggle-all-btn" id="toggle-all-miners-btn" onclick="toggleAllMiners()">
+              <svg-icon name="chevron-down" class="svg-align svg-size-sm"></svg-icon>
+              Show All
+            </button>
+          </div>
+        </div>
+        <div class="miners-overview-list" id="miners-overview-list">
+          <div class="loading-msg" id="inventory-loading">Loading inventory...</div>
+        </div>
+      </div>
+
+      <!-- Resizer (drag to adjust height) -->
+      <div class="resizer-horizontal hidden" id="resizer-main"></div>
+
+      <!-- Wallet detail cards -->
+      <div class="cards-section collapsed" id="cards-section">
+        <div class="panel-header-toggle" onclick="toggleMainPanel('cards')">
+          <span class="toggle-icon" id="toggle-cards-icon">▶</span>
+          <span class="panel-title">Action View</span>
+          <div class="header-actions" onclick="event.stopPropagation()">
+            <button class="clear-btn" onclick="clearActionView()">Clear</button>
+          </div>
+        </div>
+        <div class="wallet-cards hidden" id="wallet-cards">
+          <div class="cards-empty">Start an action to see exactly what HashOps does in the background</div>
+        </div>
+      </div>
+
+      <!-- Logs (collapsible, sticky at bottom) -->
+      <div class="logs-section collapsed" id="logs-section">
+        <div class="panel-header-toggle" id="logs-toggle" onclick="toggleLogs()">
+          <span class="toggle-icon" id="toggle-icon">▶</span>
+          <span class="panel-title">Logs</span>
+          <div class="header-actions" onclick="event.stopPropagation()">
+            <button class="clear-btn" id="btn-toggle-debug" onclick="toggleDebugLogs()">Show DEBUG</button>
+            <button class="clear-btn" onclick="document.getElementById('log-terminal').innerHTML=''">Clear</button>
+          </div>
+        </div>
+        <div class="log-terminal hidden" id="log-terminal"></div>
+      </div>
+      <!-- Resizer Logs Bottom (drag to increase logs height downwards) -->
+      <div class="resizer-horizontal hidden" id="resizer-logs-bottom"></div>
+    </main>
+  </div>
+
+  <!-- Miner Management Modal -->
+  <div class="modal-overlay hidden" id="miner-modal">
+    <div class="modal">
+      <div class="modal-header">
+        <h3 class="modal-title">{{ action_names['batch_miners'] }} (Batch)</h3>
+        <button class="modal-close" onclick="closeMinerModal()">✕</button>
+      </div>
+
+      <div class="modal-body" id="miner-modal-body">
+        <!-- dynamic -->
+      </div>
+      <div class="modal-footer">
+        <span id="miner-modal-error" class="modal-error-msg"></span>
+        <button class="action-btn" onclick="closeMinerModal()">Cancel</button>
+        <button class="action-btn primary" id="btn-exec-miner-batch" onclick="submitMinerBatch()">Execute Batch</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" id="toast-container"></div>
+  <script src="/static/loader.js"></script>
+  <!-- Modules -->
+  <script src="/static/modules/state.js"></script>
+  <script src="/static/modules/utils.js"></script>
+  <script src="/static/modules/api.js"></script>
+  <script src="/static/modules/sidebar.js"></script>
+  <script src="/static/modules/miners.js"></script>
+  <script src="/static/modules/cards.js"></script>
+  <script src="/static/modules/miner-modal.js"></script>
+  <script src="/static/modules/layout.js"></script>
+  <!-- Orchestrator -->
+  <script src="/static/app.js"></script>
+  <script src="/static/privacy_module.js"></script>
+</body>
+
+</html>
