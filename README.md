@@ -31,7 +31,17 @@
 </p>
 
 <p align="center">
-  <a href="#screenshots">Demonstration videos are coming very soon</a>
+  <a href="#screenshots">HD Screenshots</a>  ·  
+  <a href="https://www.youtube.com/playlist?list=PLwSxDOezqqyO62SvNaHq_jCFBO72HJAfI">Demonstration videos (no sound)</a>  ·  
+  Sorry, the recording quality isn't exactly great, but at least it shows everything!
+</p>
+
+<h3 align="center">Interested in using or contributing to HashOps?</h3>
+<p align="center">
+  <a align="center" href="https://x.com/UNKW_TW">Feel free to reach me out on X. I'm open to discussion!</a>
+</p>
+<p align="center">
+  Built with curiosity (and a lot of time) - 2026
 </p>
 
 ---
@@ -375,42 +385,37 @@ HashOps relies on and interacts with third-party technologies, platforms, and pr
 
 This project claims no ownership, affiliation, or endorsement from any of these parties.
 
-> 💬 **Interested in using or contributing to HashOps?** Feel free to reach out. I'm open to discussion!
----
-
-<p align="center">
-  <em>Built with ☕ and curiosity - 2026</em>
-</p>
-
 ---
 
 ## Screenshots
 
-> *Screenshots and recordings of the live dashboard will be added here.*
+> [!NOTE]
+> For security reasons, private data (IDs, wallets, amounts, hashes, etc.) is randomized via script during the demonstrations. You may notice inconsistencies, such as addresses or hashes that change; this is normal. The goal is to show exactly what the interface looks like without having to blur all the private information.
+Without the script running, all the informations are genuine, can be clicked on and redirect to Debank for wallets or Snowtrace for transactions.
 
-<!--
 <p align="center">
-  <img src="./docs/screenshots/dashboard_overview.png" alt="Dashboard Overview" width="800" />
-  <br/><em>Dashboard — Wallet inventory with miner grid view</em>
+  <img src="https://github.com/user-attachments/assets/73047108-f6ce-405d-a497-26b4d6273052" width="800" />
+  <br/><em>Welcoming Screen</em>
 </p>
 
 <p align="center">
-  <img src="./docs/screenshots/claim_action.png" alt="Claim Action Running" width="800" />
-  <br/><em>Claim Rewards — Real-time status tracking per wallet</em>
+  <img src="https://github.com/user-attachments/assets/a7deb6ec-2619-4e84-83c7-1a722cfe4c5e" width="800" />
+  <br/><em>Wallets view</em>
+
 </p>
 
 <p align="center">
-  <img src="./docs/screenshots/miner_batch_modal.png" alt="Miner Batch Modal" width="800" />
+  <img src="https://github.com/user-attachments/assets/ac93420b-23ce-4448-8d24-2520ef0359b9" width="800" />
+  <br/><em>Action View</em>
+</p>
+
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/87855cb2-17f5-4859-b128-413bd1b2bb84" width="800" />
   <br/><em>Manage Miners — Batch modal for Withdraw / Transfer / Place</em>
 </p>
 
 <p align="center">
-  <img src="./docs/screenshots/gas_dispatch.png" alt="Gas Dispatch" width="800" />
-  <br/><em>Gas Dispatch — Smart AVAX balancing across wallets</em>
+  <img src="https://github.com/user-attachments/assets/a228fd34-b901-4724-9c0e-0f91a700fa0a" width="800" />
+  <br/><em>Manage Miners — Grid view of Batch modal</em>
 </p>
 
-<p align="center">
-  <img src="./docs/screenshots/privacy_mode.png" alt="Privacy Mode" width="800" />
-  <br/><em>Privacy Mode — Sensitive data hidden with one click</em>
-</p>
--->
