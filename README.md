@@ -32,7 +32,7 @@
 
 <p align="center">
   <a href="#screenshots">HD Screenshots</a>  ·  
-  <a href="https://www.youtube.com/playlist?list=PLwSxDOezqqyO62SvNaHq_jCFBO72HJAfI">Demonstration videos (no sound)</a>  ·  
+  <a href="https://www.youtube.com/playlist?list=PLwSxDOezqqyO62SvNaHq_jCFBO72HJAfI">Demonstration videos (no sound)</a></br>  
   Sorry, the recording quality isn't exactly great, but at least it shows everything!
 </p>
 
@@ -387,11 +387,15 @@ This project claims no ownership, affiliation, or endorsement from any of these 
 
 ---
 
-## Screenshots
+## Screenshots & Videos 
 
 > [!NOTE]
 > For security reasons, private data (IDs, wallets, amounts, hashes, etc.) is randomized via script during the demonstrations. You may notice inconsistencies, such as addresses or hashes that change; this is normal. The goal is to show exactly what the interface looks like without having to blur all the private information.
 Without the script running, all the informations are genuine, can be clicked on and redirect to Debank for wallets or Snowtrace for transactions.
+
+<p align="center">
+  <a href="https://www.youtube.com/playlist?list=PLwSxDOezqqyO62SvNaHq_jCFBO72HJAfI">Demo Video Playlist (no sound)</a></br>
+</p>
 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/73047108-f6ce-405d-a497-26b4d6273052" width="800" />
@@ -401,7 +405,6 @@ Without the script running, all the informations are genuine, can be clicked on 
 <p align="center">
   <img src="https://github.com/user-attachments/assets/a7deb6ec-2619-4e84-83c7-1a722cfe4c5e" width="800" />
   <br/><em>Wallets view</em>
-
 </p>
 
 <p align="center">
@@ -418,4 +421,3 @@ Without the script running, all the informations are genuine, can be clicked on 
   <img src="https://github.com/user-attachments/assets/a228fd34-b901-4724-9c0e-0f91a700fa0a" width="800" />
   <br/><em>Manage Miners — Grid view of Batch modal</em>
 </p>
-
