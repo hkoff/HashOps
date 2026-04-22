@@ -31,7 +31,7 @@
 </p>
 
 <p align="center">
-  <a href="#screenshots">HD Screenshots</a>  ·  
+  <a href="#screenshots--videos">HD Screenshots</a>  ·  
   <a href="https://www.youtube.com/playlist?list=PLwSxDOezqqyO62SvNaHq_jCFBO72HJAfI">Demonstration videos (no sound)</a></br>  
   Sorry, the recording quality isn't exactly great, but at least it shows everything!
 </p>
