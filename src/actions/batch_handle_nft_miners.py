@@ -515,7 +515,7 @@ def run_all_miners_batches(target_wallets: List[Dict[str, Any]], data: Dict[str,
         recap += f"<svg-icon name=\"copy\" class=\"copy-btn\" onclick=\"copyToClipboard('{ctx.total_claimed}')\" title=\"Copy amount\"></svg-icon>"
         
         if len(ctx.per_wallet_rewards) > 1:
-            recap += "<div class=\"wdc-summary-list mt-sm\">"
+            recap += "<div class=\"wdc-summary-list\">"
             for w_name, amt in ctx.per_wallet_rewards.items():
                 recap += f"<div class=\"wdc-summary-item\"><b>{w_name}:</b> <span class=\"privacy-data\">{format_decimal(amt, 4)}</span></div>"
             recap += "</div>"

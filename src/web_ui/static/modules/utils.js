@@ -151,7 +151,7 @@ function upsertElement(parent, id, className, html, tagName = 'div', staggerInde
   parent.appendChild(newEl);
   
   // Remove 'is-new' only after the staggered animation has fully completed
-  const totalAnimTime = 600 + (staggerIndex * 80);
+  const totalAnimTime = 1000 + (staggerIndex * 80);
   setTimeout(() => { if (newEl) newEl.classList.remove('is-new'); }, Math.max(1500, totalAnimTime));
   return newEl;
 }
@@ -226,8 +226,7 @@ function morphDOM(oldNode, newNode) {
     }
   }
 
-  // 2. Cleanup ANY remaining nodes that might be insignificant text nodes we didn't filter
-  // or that were left behind. This ensures the DOM is clean.
+  // 2. Cleanup ANY remaining nodes that might be insignificant text nodes we didn't filter or that were left behind. This ensures the DOM is clean.
   Array.from(oldNode.childNodes).forEach(n => {
     if (n.nodeType === Node.TEXT_NODE && n.nodeValue.trim() === '') n.remove();
   });
@@ -429,7 +428,10 @@ function updateInteractiveState() {
     'btn-dispatch-gas',
     'btn-manage-miners',
     'btn-exec-miner-batch',
-    'select-all-btn'
+    'select-all-btn',
+    'refbar-wallets-btn',
+    'refbar-cache-btn',
+    'refbar-gas-btn'
   ];
 
   buttonIds.forEach(id => {

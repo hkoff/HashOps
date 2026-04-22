@@ -40,6 +40,10 @@ function renderSidebar() {
     const isLoading = state.minersLoading && state.minersLoading[w.address.toLowerCase()];
     const hasDebt = !isLoading && info && !info.error && info.net_claimable < threshold;
 
+    const status = state.walletStatuses[w.name] || 'idle';
+    const badgeLabel = SIDEBAR_STATUS_LABELS[status] || status;
+    const badgeClass = `wallet-status-badge status-${status}`;
+
     const html = `
       <div class="wallet-checkbox"><span class="wallet-checkbox-icon">✓</span></div>
       <div class="wallet-info">
@@ -53,7 +57,7 @@ function renderSidebar() {
           </a>
         </div>
       </div>
-      <span class="wallet-status-badge ws-idle" id="ws-${w.name}">—</span>`;
+      <span class="${badgeClass}" id="ws-${w.name}">${badgeLabel}</span>`;
 
     const el = upsertElement(walletsList, id, `wallet-card${hasDebt ? ' wallet-debt' : ''}`, html);
     el.dataset.name = w.name;
@@ -78,6 +82,17 @@ function updateSelectionUI() {
 }
 
 /* ── Status Badges ───────────────────────────────────────────── */
+const SIDEBAR_STATUS_LABELS = {
+  idle: '—',
+  pending: '—',
+  running: '<svg-icon name="spin" class="spin-icon-svg svg-size-sm"></svg-icon>',
+  success: '✓ OK',
+  skipped: '⊘',
+  partial: '⚠',
+  warning: '⚠',
+  error: '✗'
+};
+
 window.resetSidebarBadges = function() {
   document.querySelectorAll('.wallet-status-badge').forEach(b => {
     b.innerHTML = '—';
@@ -86,19 +101,10 @@ window.resetSidebarBadges = function() {
 };
 
 function updateSidebarBadges() {
-  const labels = {
-    pending: '—',
-    running: '<svg-icon name="spin" class="spin-icon-svg svg-size-sm"></svg-icon>',
-    success: '✓ OK',
-    skipped: '⊘',
-    partial: '⚠',
-    warning: '⚠',
-    error: '✗'
-  };
   for (const [name, status] of Object.entries(state.walletStatuses)) {
     const b = document.getElementById(`ws-${name}`);
     if (b) {
-      const newHtml = labels[status] || status;
+      const newHtml = SIDEBAR_STATUS_LABELS[status] || status;
       const newClass = `wallet-status-badge status-${status || 'idle'}`;
       if (b.innerHTML !== newHtml) b.innerHTML = newHtml;
       if (b.className !== newClass) b.className = newClass;

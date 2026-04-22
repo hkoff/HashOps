@@ -110,6 +110,8 @@ async function refreshAllMiners() {
   const addresses = state.wallets.map(w => w.address);
   addresses.forEach(addr => delete state.walletMiners[addr.toLowerCase()]);
 
+  setRunning(true);
+  setAppStatus('running');
   try {
     const success = await loadBatchWalletMiners(addresses);
     if (success) {
@@ -139,6 +141,8 @@ async function refreshAllMiners() {
     showToast('Network error', 'error');
   } finally {
     if (btn) btn.classList.remove('loading');
+    setRunning(false);
+    setAppStatus('idle');
   }
 }
 
@@ -149,6 +153,8 @@ async function forceRefreshMinersCache() {
   const btn = document.getElementById('refbar-cache-btn');
   if (btn) btn.classList.add('loading');
   showToast('Updating miners cache...', 'info');
+  setRunning(true);
+  setAppStatus('running');
   try {
     const res = await fetch('/api/miners/cache/refresh', { method: 'POST' });
     const data = await res.json();
@@ -179,6 +185,8 @@ async function forceRefreshMinersCache() {
     showToast('Network error', 'error');
   } finally {
     if (btn) btn.classList.remove('loading');
+    setRunning(false);
+    setAppStatus('idle');
   }
 }
 
@@ -198,6 +206,8 @@ async function checkGasPrice() {
   const btn = document.getElementById('refbar-gas-btn');
   if (btn) btn.classList.add('loading');
   
+  setRunning(true);
+  setAppStatus('running');
   try {
     const res = await fetch('/api/gas');
     const data = await res.json();
@@ -229,6 +239,8 @@ async function checkGasPrice() {
     showToast('Network error (Gas)', 'error');
   } finally {
     if (btn) btn.classList.remove('loading');
+    setRunning(false);
+    setAppStatus('idle');
   }
 }
 
@@ -343,6 +355,9 @@ function renderMinersOverview() {
         const isDebt = info.net_claimable < threshold;
         bodyHtml += `
         <div class="flex-inline">
+          <div class="mov-facility">
+            <span class="mov-facility-stat"><strong>Lv.${facility.facilityIndex}</strong></span>
+          </div>
           <div class="mov-facility">
             <span class="mov-facility-stat">🏭 <strong>${facility.currMiners}/${facility.maxMiners}</strong> miners</span>
             <span class="mov-fstat-sep"></span>

@@ -150,12 +150,13 @@ function getWalletCardHtml(name, d) {
   if (d.transfer_tx) txRows += txRow('Transfer hCASH', d.transfer_tx, d.transfer_status);
   txRows += avaxTxsHtml;
   
-  const txContainerHtml = txRows ? `<div class="wdc-txs-container">${txRows}</div>` : '';
+  const txContainerHtml = txRows ? `<div class="wdc-txs">${txRows}</div>` : '';
 
   // --- 4. Alert & Final Recap Layer ---
   let footerHtml = '';
   if (d.error) footerHtml += `<div class="wdc-error">✗ ${d.error}</div>`;
   if (d.recap_html) footerHtml += `<div class="wdc-summary">${d.recap_html}</div>`;
+
 
   return `
     <div class="wdc-header">
@@ -208,7 +209,7 @@ function getAvaxTransfersMarkup(transferDict) {
 
   let txsHtml = '';
   Object.entries(groups).forEach(([walletAction, txs]) => {
-    txsHtml += `<div class="wdc-data-group mt-sm">
+    txsHtml += `<div class="wdc-data-group">
       <div class="wdc-wallet-label flex-inline">
         <svg-icon name="wallet" class="svg-size-sm"></svg-icon>
         ${walletAction}
@@ -303,7 +304,7 @@ function getGenericCardHtml(cardId, card) {
 
   let txHtml = '';
   if (card.txs && card.txs.length > 0) {
-    txHtml = `<div>${card.txs.map(tx => txRow(tx.label, tx.tx, tx.status)).join('')}</div>`;
+    txHtml = `<div class="wdc-txs">${card.txs.map(tx => txRow(tx.label, tx.tx, tx.status)).join('')}</div>`;
   }
 
   let summaryHtml = '';

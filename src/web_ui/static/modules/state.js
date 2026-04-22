@@ -40,6 +40,7 @@ const state = {
   showDebug: false,        // DEBUG log-level filter toggle
   panelMinersOpen: true,   // Miners overview panel open by default
   panelCardsOpen: false,   // Wallet cards panel closed by default
+  panelLogsOpen: false,    // Logs panel closed by default
 
   /* Polling & caching ──────────────────────────────────────────── */
   pollInterval: null,      // setTimeout ID for status polling

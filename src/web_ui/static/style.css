@@ -80,23 +80,29 @@
     --spacing-lg: 16px;
     --spacing-xl: 20px;
 
-    /* --- Common Transitions --- */
-    --transition-fast: 0.15s ease-in-out;
-    --transition-md: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    --transition-slow-e: 0.5s ease;
-    --transition-slow-eio: 0.5s ease-in-out;
-
     /* --- Animation Easing Curves --- */
     --ease-standard: cubic-bezier(0.4, 0, 0.2, 1);
     --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
     --ease-out-back: cubic-bezier(0.2, 0.8, 0.2, 1);
     --ease-elastic: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* --- Common Transitions --- */
+    --transition-fast: 0.15s ease-in-out;
+    --transition-md: 0.25s var(--ease-standard);
+    --transition-slow-e: 0.5s ease;
+    --transition-slow-eio: 0.6s var(--ease-standard);
+
+    /* --- Panel Heights (Controlled by JS) --- */
+    --miners-height: 400px;
+    --cards-height: 400px;
+    --logs-height: 400px;
 }
 
 /* Enable custom property transitions for smooth status changes */
 @property --st-color { syntax: "<color>"; inherits: true; initial-value: transparent; }
 @property --st-bg { syntax: "<color>"; inherits: true; initial-value: transparent; }
 @property --st-border { syntax: "<color>"; inherits: true; initial-value: transparent; }
+@property --wdc-opacity { syntax: "<number>"; inherits: true; initial-value: 1; }
 
 /* ==========================================================================
    01. BASE & RESET
@@ -118,6 +124,9 @@ body {
     font-size: var(--font-size-md);
     line-height: 1.6;
     overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
 }
 
 button, input, select, textarea, a {
@@ -284,7 +293,7 @@ svg-icon[name="spin"],
     background: rgba(var(--cyan-rgb), .14);
     border-color: rgba(var(--cyan-rgb), .45);
 }
-.refbar-btn.loading {
+.refbar-btn.loading, .refbar-btn:disabled {
     opacity: 0.6;
     pointer-events: none;
 }
@@ -352,6 +361,8 @@ svg-icon[name="spin"],
     user-select: none;
     min-width: 320px;
     max-width: 450px;
+    backface-visibility: hidden;
+    transform: translateZ(0);
 }
 
 .toast:hover {
@@ -437,6 +448,8 @@ svg-icon[name="spin"],
     flex-direction: column;
     box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
     animation: slideInUp 0.75s ease-in-out;
+    backface-visibility: hidden;
+    transform: translateZ(0);
 }
 .modal.closing { animation: slideOutDown var(--transition-slow-eio) forwards; }
 
@@ -822,7 +835,10 @@ body.privacy-mode .privacy-data {
     border-radius: var(--radius-md);
     flex-shrink: 0;
     text-transform: uppercase;
-    transition: all .2s;
+    transition: all var(--transition-slow-eio);
+    /* Prevent jitter during status changes */
+    backface-visibility: hidden;
+    transform: translateZ(0);
 }
 
 /* Sidebar Action Buttons */
@@ -932,24 +948,41 @@ body.privacy-mode .privacy-data {
     transition: 0.2s ease-in-out;
 }
 
-/* --- Feature: Wallet Cards --- */
-.cards-section {
-    flex: 1 1 0;
-    min-height: 0;
-    border-bottom: 1px solid var(--border);
+/* --- Shared Panel Section Layout --- */
+.cards-section,
+.miners-overview-section,
+.logs-section {
+    min-height: 50px;
+    max-height: 4000px;
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
-    transition: var(--transition-slow-eio);
-    max-height: 500px;
+    overflow: hidden;
+    transition: all var(--transition-slow-eio);
+    will-change: flex-basis, max-height;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+}
+
+/* --- Feature: Wallet Cards --- */
+.cards-section {
+    flex: 0 0 var(--cards-height);
+    border-bottom: 1px solid var(--border);
+}
+
+.wallet-cards {
+    animation: fadeIn 0.4s ease-out both;
+    max-height: 4000px;
+    overflow: hidden;
+    transition: opacity 0.35s ease, max-height 0.35s ease;
 }
 
 .cards-section.expanded-full {
     flex: 1 1 auto;
-    max-height: 82%;
+    max-height: 85%;
 }
 
 .cards-empty {
+    min-height: 20vh;
     color: var(--accent-cyan);
     font-weight: 500;
     animation: fadeIn 0.4s ease-out both;
@@ -957,7 +990,6 @@ body.privacy-mode .privacy-data {
 
 .wallet-cards {
     display: grid;
-    min-height: 20vh;
     padding: var(--spacing-sm) var(--spacing-lg) var(--spacing-lg);
     grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: var(--spacing-sm);
@@ -975,7 +1007,16 @@ body.privacy-mode .privacy-data {
     flex-direction: column;
     gap: var(--spacing-sm);
     box-shadow: 0 0 0px transparent;
-    transition: all var(--transition-slow-e), --st-bg var(--transition-slow-e), --st-border var(--transition-slow-e), --st-color var(--transition-slow-e);
+    --wdc-opacity: 1;
+    opacity: var(--wdc-opacity);
+    transition: all var(--transition-slow-e), 
+                --st-bg var(--transition-slow-e), 
+                --st-border var(--transition-slow-e), 
+                --st-color var(--transition-slow-e),
+                --wdc-opacity var(--transition-slow-e);
+    backface-visibility: hidden;
+    transform: translateZ(0); 
+    will-change: transform, opacity;
 }
 
 /* WDC Status variants */
@@ -1008,6 +1049,7 @@ body.privacy-mode .privacy-data {
 .wdc-addr { font-family: var(--font-mono); font-size: var(--font-size-xs); color: var(--text-sec); }
 .wdc-nft-id { display: flex; gap: var(--spacing-xs); }
 .wdc-sep { border-bottom: 1px dashed var(--border-light); padding-bottom: var(--spacing-xs); margin-bottom: var(--spacing-xs); }
+.wdc-sep.empty { display: none; margin: 0; padding: 0; border: none; }
 
 .wdc-snapshots { display: flex; gap: 5px; align-items: center; flex-wrap: wrap; }
 .wdc-snap-label {
@@ -1016,15 +1058,20 @@ body.privacy-mode .privacy-data {
 }
 
 .wdc-amounts { display: flex; flex-wrap: wrap; gap: var(--spacing-sm); }
+.wdc-amounts:empty, .wdc-txs-container:empty { display: none; }
+
 .wdc-amount-pill {
-    font-family: var(--font-mono); font-size: var(--font-size-xs);
+    display: flex; align-items: center; gap: var(--spacing-xs);
+    font-family: var(--font-mono); font-size: var(--font-size-xs); font-weight: 500;
     background: var(--bg-item); border: 1px solid var(--border-soft);
     border-radius: var(--radius-xl); padding: 2px var(--spacing-md);
-    display: flex; gap: var(--spacing-xs); align-items: center;
     transition: all var(--transition-slow-eio);
+    backface-visibility: hidden;
+    transform: translateZ(0);
+    will-change: transform, opacity;
 }
-.wdc-amount-pill.is-new {
-    animation: fadeInScale var(--transition-slow-e) both;
+.wdc-amount-pill.is-new, .is-new .wdc-amount-pill {
+    animation: fadeInScale 0.5s var(--ease-out-back) both;
 }
 .wdc-amount-pill[class*="status-"] {
     color: var(--st-color); background: var(--st-bg); border-color: var(--st-border);
@@ -1033,13 +1080,16 @@ body.privacy-mode .privacy-data {
 
 .wdc-amount-pill .pill-label { color: var(--text-sec); font-size: var(--font-size-xs); }
 .wdc-amount-pill .pill-value { color: var(--text-primary); font-weight: 500; }
-.wdc-amount-pill.snapshot { opacity: 0.7; background: var(--bg-panel); font-size: var(--font-size-xs); animation: none; }
+.wdc-amount-pill.snapshot { opacity: 0.7; background: var(--bg-panel); font-size: var(--font-size-xs); }
+.wdc-amount-pill.snapshot:not(.is-new) { animation: none; }
 
 .wdc-summary {
     font-size: var(--font-size-sm); font-weight: 600;
     color: var(--accent-green); background: rgba(var(--green-rgb), .1);
-    border: 1px solid rgba(var(--green-rgb), .3);
-    padding: 4px 8px; border-radius: var(--radius-sm); line-height: 1.5;
+    box-shadow: inset 0 0 0 1px rgba(var(--green-rgb), .3);
+    padding: var(--spacing-xs) var(--spacing-md);; border-radius: var(--radius-sm); line-height: 1.5;
+    backface-visibility: hidden;
+    transform: translateZ(0);
 }
 
 .wdc-summary-list {
@@ -1052,25 +1102,47 @@ body.privacy-mode .privacy-data {
     font-size: var(--font-size-xs); color: var(--text-primary);
 }
 
+.wdc-wallet-label.is-new, .is-new .wdc-wallet-label { animation: slideInRight 0.5s var(--ease-out-expo) both;  }
+.wdc-tx.is-new, .is-new .wdc-tx { animation: slideInRight 1s var(--ease-out-expo) both; }
+
 .wdc-wallet-label {
     font-size: var(--font-size-sm); color: var(--text-sec);
     font-weight: 600; text-transform: uppercase; gap: var(--spacing-sm);
+    backface-visibility: hidden;
+    transform: translateZ(0);
 }
 
-.wdc-txs { display: flex; flex-direction: column; gap: var(--spacing-sm); }
-.wdc-tx { display: flex; align-items: center; gap: var(--spacing-sm); font-size: var(--font-size-sm); font-weight: 500; }
-.wdc-tx-label { color: var(--text-sec); flex-shrink: 0; min-width: 56px; }
+.wdc-txs { 
+    display: flex; flex-direction: column; gap: var(--spacing-sm); 
+    perspective: 1000px;
+    -webkit-perspective: 1000;
+}
+.wdc-tx { 
+    display: flex; align-items: center; gap: var(--spacing-sm); 
+    font-size: var(--font-size-sm); font-weight: 500; 
+    will-change: transform, opacity;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+}
+
+.wdc-tx-label { 
+    color: var(--text-sec); flex-shrink: 0; min-width: 56px; 
+    backface-visibility: hidden;
+}
 .wdc-tx-link {
     color: var(--accent-cyan); font-family: var(--font-mono);
     font-size: var(--font-size-xs); display: inline-flex; align-items: center;
     gap: var(--spacing-xs); word-break: break-all;
 }
 .wdc-tx-link:hover { color: var(--accent-cyan); text-decoration: underline;}
+
 .wdc-tx-status {
     font-size: var(--font-size-xs); display: inline-flex; align-items: center;
     justify-content: center; width: 16px; height: 16px; font-weight: bold;
     color: var(--st-color);
+    backface-visibility: hidden;
 }
+
 .wdc-tx-pending { color: var(--text-sec); }
 .wdc-tx-success { color: var(--status-success-cyan); }
 .wdc-error {
@@ -1078,18 +1150,36 @@ body.privacy-mode .privacy-data {
     color: var(--status-error); background: rgba(var(--red-rgb), .1);
     border: 1px solid rgba(var(--red-rgb), .3);
     padding: 6px 10px; border-radius: var(--radius-sm); line-height: 1.5; line-break: anywhere;
+    backface-visibility: hidden;
+    transform: translateZ(0);
+}
+
+.wdc-error.is-new,
+.wdc-summary.is-new,
+.skipped-msg.is-new {
+    animation: fadeInScale 0.6s var(--ease-elastic) both;
+}
+
+.wdc-data-group.is-new {
+    animation: slideDown 0.6s var(--ease-out-expo) both;
 }
 
 /* --- Feature: Miners Overview --- */
 .miners-overview-section {
+    flex: 1 0 var(--miners-height);
+    border-bottom: 1px solid var(--border);
+}
+
+.miners-overview-list { 
+    flex: 1;
     display: flex; 
     flex-direction: column; 
     overflow-y: auto;
-    border-bottom: 1px solid var(--border);
-    min-height: 0; 
-    transition: var(--transition-slow-eio);
+    min-height: 0;
+    max-height: 4000px;
+    animation: fadeIn 0.4s ease-out both;
+    transition: opacity 0.35s ease, max-height 0.35s ease;
 }
-.miners-overview-list { display: flex; flex-direction: column; }
 
 .miners-ov-body {
     display: grid; grid-template-rows: 0fr;
@@ -1153,7 +1243,6 @@ body.privacy-mode .privacy-data {
     padding: var(--spacing-xs) var(--spacing-md);
 }
 .mov-rewards-row { background: rgba(var(--violet-rgb), .03); border-color: rgba(var(--violet-rgb), .08); }
-.mov-facility strong { color: var(--accent-cyan); }
 .mov-facility-stat { color: var(--text-sec); }
 .mov-facility-stat strong { color: var(--text-primary); font-weight: 600; }
 .mov-no-facility {
@@ -1239,6 +1328,8 @@ body.privacy-mode .privacy-data {
     border-radius: var(--radius-md);
     animation: slideDown 0.4s var(--ease-out-expo);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+    backface-visibility: hidden;
+    transform: translateZ(0);
 }
 
 .system-alert.alert-warning {
@@ -1305,15 +1396,16 @@ body.privacy-mode .privacy-data {
 
 /* --- Feature: Logs Terminal --- */
 .logs-section {
-    display: flex; flex-direction: column;
-    border-top: 1px solid var(--border-soft);
-    transition: var(--transition-slow-eio);
+    flex: 0 0 var(--logs-height);
 }
 
 .log-terminal {
     overflow-y: auto; flex: 1 1 0;
     padding: 10px var(--spacing-xl); font-family: var(--font-mono);
     font-size: var(--font-size-md); line-height: 1.7;
+    max-height: 4000px;
+    animation: fadeIn 0.4s ease-out both;
+    transition: opacity 0.35s ease, max-height 0.35s ease;
 }
 .log-terminal.hide-debug .DEBUG { display: none !important; }
 .log-entry.DEBUG { opacity: 0.65; }
@@ -1462,6 +1554,7 @@ body.privacy-mode .privacy-data {
 .loader-content {
     width: 100%; height: 100%; max-width: 33vw; align-content: center; text-align: center;
     position: relative; padding: var(--spacing-xl); animation: fadeInScale 2s var(--ease-out-back);
+    backface-visibility: hidden; transform: translateZ(0);
 }
 .loader-logo-container { margin-bottom: 40px; position: relative; }
 .loader-logo-img { width: 80px; height: 80px; filter: drop-shadow(0 0 20px rgba(var(--cyan-rgb), 0.4)); animation: logoPulse 2s ease-in-out infinite; }
@@ -1552,32 +1645,39 @@ body.privacy-mode .privacy-data {
    07. HELPER UTILITIES
    ========================================================================== */
 /* Hidden / Invisible status */
-.hidden { display: none; }
+.hidden { display: none !important; }
 .invisible { visibility: hidden; opacity: 0; pointer-events: none; }
+
+/* Disable transitions during resize for real-time feedback */
+body.is-resizing *, 
+body.is-resizing {
+    transition: none !important;
+}
 
 /* Panel Collapse State */
 .miners-overview-section.collapsed,
-.logs-section.collapsed {
-    flex: 0 0 50px;
-    overflow: hidden;
-}
-
+.logs-section.collapsed,
 .cards-section.collapsed {
-    flex: 0 0 auto;
+    flex: 0 0 50px;
     max-height: 50px;
-    overflow: hidden;
+    min-height: 50px;
 }
 
 /* Closing Animations */
 .modal-overlay.closing,
 #loader-overlay.closing,
-#loader-start-button-wrapper.closing,
+#loader-start-button-wrapper.closing {
+    animation: fadeOut 0.3s ease-in-out forwards;
+    pointer-events: none;
+}
+
 .miners-overview-list.closing,
 .wallet-cards.closing,
 .log-terminal.closing,
-.resizer-horizontal.closing {
-    animation: fadeOut 0.3s ease-in-out forwards;
+#resizer-logs-bottom.closing {
+    animation: fadeOut 0.4s var(--ease-standard) forwards;
     pointer-events: none;
+    will-change: opacity, transform;
 }
 
 /* Flex/Grid Helpers */
@@ -1585,7 +1685,6 @@ body.privacy-mode .privacy-data {
 .gap-sm { gap: var(--spacing-xs); }
 
 /* Spacing Helpers */
-.mt-sm { margin-top: 6px; }
 .mb-sm { margin-bottom: 8px; }
 .pt-xl { padding-top: var(--spacing-xl); }
 .pb-xl { padding-bottom: var(--spacing-xl); }
@@ -1598,7 +1697,7 @@ body.privacy-mode .privacy-data {
 .status-success-cyan { --st-color: var(--accent-cyan); --st-bg: rgba(var(--cyan-rgb), 0.12); --st-border: rgba(var(--cyan-rgb), 0.5); }
 .status-error { --st-color: var(--status-error); --st-bg: rgba(var(--red-rgb), 0.15); --st-border: rgba(var(--red-rgb), 0.5); }
 .status-partial, .status-warning { --st-color: var(--status-partial); --st-bg: rgba(var(--yellow-rgb), 0.15); --st-border: rgba(var(--yellow-rgb), 0.5); }
-.status-skipped { --st-color: var(--text-sec); --st-bg: rgba(var(--text-sec-rgb), 0.1); --st-border: rgba(var(--text-sec-rgb), 0.3); opacity: 0.7; }
+.status-skipped { --st-color: var(--text-sec); --st-bg: rgba(var(--text-sec-rgb), 0.1); --st-border: rgba(var(--text-sec-rgb), 0.3); --wdc-opacity: 0.7; }
 
 /* Animation classes mapped to variables */
 .ws-idle { color: var(--text-sec); background: var(--bg-item); border: 1px solid var(--border-soft); }
@@ -1621,6 +1720,8 @@ body.privacy-mode .privacy-data {
     text-align: center; font-size: var(--font-size-xs); color: var(--text-sec);
     background: var(--bg-item); padding: var(--spacing-xs) var(--spacing-md);
     border-radius: var(--radius-sm); border: 1px dashed var(--border-light);
+    backface-visibility: hidden;
+    transform: translateZ(0);
 }
 
 .loading-msg { color: var(--text-primary); font-size: var(--font-size-md); font-weight: 900; padding: var(--spacing-xl); }
@@ -1648,13 +1749,13 @@ body.is-resizing, body.is-resizing * { transition: none !important; user-select:
 }
 
 @keyframes fadeInScale {
-    from { opacity: 0; transform: scale(0.9) translateY(10px); }
-    to { opacity: 1; transform: scale(1) translateY(0); }
+    from { opacity: 0; transform: scale3d(0.9, 0.9, 1) translate3d(0, 10px, 0) rotate(0.001deg); }
+    to { opacity: var(--wdc-opacity, 1); transform: scale3d(1, 1, 1) translate3d(0, 0, 0) rotate(0.001deg); }
 }
 
 @keyframes slideInRight {
-    from { opacity: 0; transform: translateX(10px); }
-    to { opacity: 1; transform: translateX(0); }
+    from { opacity: 0; transform: translate3d(20px, 0, 0) rotate(0.001deg); }
+    to { opacity: 1; transform: translate3d(0, 0, 0) rotate(0.001deg); }
 }
 
 @keyframes slideInUp {
