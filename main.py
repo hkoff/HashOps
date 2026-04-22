@@ -48,6 +48,7 @@ def _discover_miners(w3, addresses, game_main, game_token, miner_types) -> dict:
 
         m_ingame    = 0
         m_inventory = 0
+        m_listed    = 0
         ext_nfts    = 0
         facilities  = 0
         total       = len(batch_data)
@@ -66,7 +67,11 @@ def _discover_miners(w3, addresses, game_main, game_token, miner_types) -> dict:
                     update_init_status(miner={"name": mt["nft_name"], "image": mt["nft_image"]})
 
             # Owned NFTs (inventory)
-            for idx_str, tokens in info.get("owned", {}).items():
+            owned_data = info.get("owned", {})
+            listings = info.get("listings", [])
+            m_listed += len(listings)
+
+            for idx_str, tokens in owned_data.items():
                 mt = miner_types.get(idx_str, {})
                 is_miner = mt.get("category") == "miner_nft"
                 count = len(tokens)
@@ -91,11 +96,18 @@ def _discover_miners(w3, addresses, game_main, game_token, miner_types) -> dict:
         total_assets = m_ingame + m_inventory + ext_nfts
         logger.info(green_bold(
             f"Found {total_assets} assets "
-            f"({m_ingame} in-game, {m_inventory} in inventory, {ext_nfts} complementary NFTs) ✓"
+            f"({m_ingame} in-game, {m_inventory} in inventory"
+            + (f" including {m_listed} listed" if m_listed > 0 else "")
+            + f", {ext_nfts} complementary NFTs) ✓"
         ))
         update_init_status(detail=f"Found {facilities} facilities in {total} wallets ✓",   percentage=86)
         update_init_status(detail=f"Found {m_ingame} miners in facilities ✓",              percentage=89)
-        update_init_status(detail=f"Found {m_inventory} miners in inventory ✓",            percentage=92)
+        
+        inventory_msg = f"Found {m_inventory} miners in inventory"
+        if m_listed > 0:
+            inventory_msg += f" (including {m_listed} listed)"
+        update_init_status(detail=f"{inventory_msg} ✓", percentage=92)
+        
         update_init_status(detail=f"Found {ext_nfts} complementary NFTs ✓",                percentage=95)
         update_init_status(detail=f"{total_assets} total assets found and displayed ✓",    percentage=98)
 
@@ -123,8 +135,8 @@ def initialization_sequence():
       6. Finalize and bundle results for the dashboard
     """
     try:
-        # ── Phase 1 · Wallets ────────────────────────────────────────────────────────────────────
-        logger.info(cyan_bold("[1/5] Loading wallets..."))
+        # ── Phase 1 · Identity & Configuration ──────────────────────────────────────────────────────────
+        logger.info(cyan_bold("[1/6] Initializing Identity & Configuration..."))
         update_init_status(step="Loading Wallets...", percentage=5)
 
         wallets = load_wallets()
@@ -144,8 +156,8 @@ def initialization_sequence():
             return
         update_init_status(detail="Main wallet identified ✓", percentage=10)
 
-        # ── Phase 2 · HashCash API ─────────────────────────────────────────────────────────────────
-        logger.info(cyan_bold("[2/5] Initializing HashCash API (contracts + ABIs)..."))
+        # ── Phase 2 · HashCash API Integration ──────────────────────────────────────────────────────────
+        logger.info(cyan_bold("[2/6] Integrating HashCash API (Contracts & ABIs)..."))
         update_init_status(step="Authenticating with HashCash API...", percentage=15)
 
         try:
@@ -168,7 +180,7 @@ def initialization_sequence():
 
             init_blockchain_from_api(api_client, registry)
             logger.info(green_bold("HashCash API initialized ✓"))
-            update_init_status(detail="On-chain infrastructure ready ✓", percentage=32)
+            update_init_status(detail="On-chain infrastructure ready ✓", percentage=30)
 
         except Exception as e:
             logger.error(red_bold(f"HashCash API failed: {e}"))
@@ -187,8 +199,8 @@ def initialization_sequence():
             )
             return
 
-        # ── Phase 3 · RPC Infrastructure ─────────────────────────────────────────────────────────────────
-        logger.info(cyan_bold(f"[3/5] Connecting to Avalanche network (Chain ID: {CHAIN_ID})..."))
+        # ── Phase 3 · Blockchain & RPC Connectivity ─────────────────────────────────────────────────────
+        logger.info(cyan_bold(f"[3/6] Connecting to Avalanche Network (Chain ID: {CHAIN_ID})..."))
         update_init_status(step="Connecting to Avalanche...", percentage=35)
 
         rpc_url = get_rpc_url()
@@ -206,17 +218,17 @@ def initialization_sequence():
         logger.info(cyan_bold(f"      · game_main  : {get_contract_address()}"))
         logger.info(cyan_bold(f"      · game_token : {get_hcash_token_address()}"))
         logger.info(green_bold("Web3 Infrastructure ready ✓"))
-        update_init_status(detail=f"Connected to Avalanche C-Chain #{CHAIN_ID} ✓", percentage=40)
+        update_init_status(detail=f"Connected to Avalanche C-Chain #{CHAIN_ID} ✓", percentage=45)
 
-        # ── Phase 4 · Miners Cache ─────────────────────────────────────────────────────────────────
-        logger.info(cyan_bold("[4/5] Loading miner types cache..."))
-        update_init_status(step="Syncing Miner Types...", percentage=45)
+        # ── Phase 4 · Asset Metadata Synchronization ──────────────────────────────────────────────────
+        logger.info(cyan_bold("[4/6] Synchronizing Asset Metadata..."))
+        update_init_status(step="Syncing Miner Types...", percentage=50)
 
         try:
             miner_types = refresh_miner_cache_if_needed(w3, game_main, force=False)
             m_count = sum(1 for m in miner_types.values() if m.get("category") == "miner_nft")
             e_count = sum(1 for m in miner_types.values() if m.get("category") == "external_nft")
-            update_init_status(detail=f"Loaded {m_count} miners + {e_count} external NFTs ✓", percentage=55)
+            update_init_status(detail=f"Loaded {m_count} miners + {e_count} external NFTs ✓", percentage=60)
             logger.info(green_bold(f"Miner cache ready ({m_count} miners, {e_count} external) ✓"))
             remove_system_alert("miner-cache-stale")
         except Exception as e:
@@ -224,13 +236,14 @@ def initialization_sequence():
             update_init_status(detail=f"Cache warning: {e}")
             miner_types = {}
 
-        # ── Miner Discovery ────────────────────────────────
-        update_init_status(step="Discovering Miners...", percentage=60)
+        # ── Phase 5 · Comprehensive Assets Discovery ──────────────────────────────────────────────────
+        logger.info(cyan_bold("[5/6] Discovering Assets & Marketplace Listings..."))
+        update_init_status(step="Discovering Assets...", percentage=65)
         addresses = [w["address"] for w in wallets]
         batch_data = _discover_miners(w3, addresses, game_main, game_token, miner_types)
                 
-        # ── Phase 5 · Finalize ────────────────────────────────────────────────────────────────────
-        logger.info(cyan_bold("[5/5] Finalizing startup..."))
+        # ── Phase 6 · Finalizing Engine Startup ───────────────────────────────────────────────────────
+        logger.info(cyan_bold("[6/6] Finalizing Startup..."))
 
         try:
             gas_price_gwei = round(w3.eth.gas_price / 1e9, 2)

@@ -112,7 +112,9 @@ function openMinerModal() {
     if (placed.length) {
       placed.forEach(m => {
         m.gameId = m.id;
-        listDiv.innerHTML += buildMinerRowHtml(w, m, getMinerLabel(m.nftContract, m.minerIndex), 'placed');
+        // Cross-reference with listings
+        const listing = (info.listings || []).find(l => l.assetContract.toLowerCase() === m.nftContract?.toLowerCase() && l.tokenId == m.nftTokenId);
+        listDiv.innerHTML += buildMinerRowHtml(w, { ...m, listing }, getMinerLabel(m.nftContract, m.minerIndex), 'placed');
       });
     }
 
@@ -130,7 +132,9 @@ function openMinerModal() {
         ids.forEach(tokenId => {
           const p_raw = typeData.power !== undefined ? typeData.power : 0;
           const h_raw = typeData.hashrate !== undefined ? typeData.hashrate : 0;
-          listDiv.innerHTML += buildMinerRowHtml(w, { id: tokenId, gameId: null, nftTokenId: tokenId, cIdx, power: p_raw, hashrate: h_raw, nftContract }, mt, 'owned');
+          // Cross-reference with listings
+          const listing = (info.listings || []).find(l => l.assetContract.toLowerCase() === nftContract?.toLowerCase() && l.tokenId == tokenId);
+          listDiv.innerHTML += buildMinerRowHtml(w, { id: tokenId, gameId: null, nftTokenId: tokenId, cIdx, power: p_raw, hashrate: h_raw, nftContract, listing }, mt, 'owned');
         });
       });
     }
@@ -166,7 +170,7 @@ function renderSingleWalletMinerUI(wname, container) {
     <div class="mm-grid-container">
       <div class="mm-wallet-title">
         <div class="mm-grid-title">Facility Grid - ${wname}</div>
-        <div class="mov-wallet-addr">${short}</div>
+        <div class="mov-wallet-addr privacy-random">${short}</div>
         ${renderBulkActionsHtml(wname)}
       </div>
       <div class="mm-facility-grid" style="--grid-cols: ${maxX}">
@@ -208,8 +212,8 @@ function renderSingleWalletMinerUI(wname, container) {
   html += `
     <div class="mm-section">
       <div class="mm-wallet-title">
-        <svg-icon name="box" class="svg-size-xl"></svg-icon>
-        Inventory (Owned NFTs)
+        <div class="mm-grid-title"><svg-icon name="box" class="svg-size-xl"></svg-icon> Inventory (Owned NFTs)</div>
+        ${renderBulkActionsHtml(wname, true)}
       </div>
       <div class="mm-item-list" id="list-${wname}"></div>
     </div>
@@ -232,7 +236,9 @@ function renderSingleWalletMinerUI(wname, container) {
       ids.forEach(tokenId => {
         const p_raw = typeData.power !== undefined ? typeData.power : 0;
         const h_raw = typeData.hashrate !== undefined ? typeData.hashrate : 0;
-        listDiv.innerHTML += buildMinerRowHtml(w, { id: tokenId, gameId: null, nftTokenId: tokenId, cIdx, power: p_raw, hashrate: h_raw, nftContract }, mt, 'owned');
+        // Cross-reference with listings
+        const listing = (info.listings || []).find(l => l.assetContract.toLowerCase() === nftContract?.toLowerCase() && l.tokenId == tokenId);
+        listDiv.innerHTML += buildMinerRowHtml(w, { id: tokenId, gameId: null, nftTokenId: tokenId, cIdx, power: p_raw, hashrate: h_raw, nftContract, listing }, mt, 'owned');
       });
     });
   }
@@ -265,13 +271,10 @@ window.getMinerActionConfig = function (wname, mid, m, type) {
 
 /** Sync all DOM controls for a miner (list + grid panel) to match state. */
 window.syncMinerControlsUI = function (wname, mid) {
-  const key = `${wname}:${mid}`;
-  const cfg = state.minerBatchConfig[key];
-  if (!cfg) return;
+  const ctrls = document.querySelectorAll(`[data-miner-key="${wname}:${mid}"]`);
+  const cfg = getMinerActionConfig(wname, mid);
 
-  const controls = document.querySelectorAll(`[data-miner-key="${wname}:${mid}"]`);
-
-  controls.forEach(ctrl => {
+  ctrls.forEach(ctrl => {
     const btnWD = ctrl.querySelector('.mm-ap-btn.withdraw');
     if (btnWD) btnWD.classList.toggle('active', cfg.withdraw);
 
@@ -279,13 +282,34 @@ window.syncMinerControlsUI = function (wname, mid) {
     if (sel) {
       sel.value = cfg.transferDest;
       sel.classList.toggle('active', !!cfg.transferDest);
+      const firstOpt = sel.options[0];
+      if (firstOpt && firstOpt.value === "") {
+        firstOpt.textContent = cfg.transferDest ? '-- Cancel --' : '-- Transfer --';
+      }
     }
 
     const btnPL = ctrl.querySelector('.mm-ap-btn.place');
     if (btnPL) btnPL.classList.toggle('active', cfg.autoPlace);
   });
 
-  // Sync grid slot border color
+  const bulkSel = document.querySelector(`.mm-bulk-select[data-bulk-wallet="${wname}"]`);
+  if (bulkSel) {
+    const { anyTransfer, uniqueDests } = getWalletTransferSummary(wname);
+    const firstOpt = bulkSel.options[0];
+    const dummyOpt = bulkSel.options[1];
+    const label = anyTransfer ? '-- Cancel All Transfers --' : '-- Transfer All --';
+    if (firstOpt) firstOpt.textContent = label;
+    if (dummyOpt) dummyOpt.textContent = label;
+    
+    if (uniqueDests.length === 1 && uniqueDests[0] !== "") {
+        bulkSel.value = uniqueDests[0];
+    } else if (anyTransfer) {
+        bulkSel.value = "mixed";
+    } else {
+        bulkSel.value = "";
+    }
+  }
+
   const slot = document.getElementById('slot-' + mid);
   if (slot) {
     slot.style.borderColor = cfg.transferDest ? 'var(--accent-blue)' : (cfg.withdraw ? 'var(--accent-red)' : '');
@@ -302,6 +326,14 @@ window.toggleMinerWithdraw = function (wname, mid) {
 
 window.setMinerTransfer = function (wname, mid, dest) {
   const cfg = getMinerActionConfig(wname, mid);
+  const w = state.wallets.find(x => x.name === wname);
+
+  // Prevention: cannot transfer to self
+  if (dest && w && dest.toLowerCase() === w.address.toLowerCase()) {
+    showToast("You cannot transfer a miner to its current wallet.", "warning");
+    dest = "";
+  }
+
   cfg.transferDest = dest;
   if (dest && cfg.type === 'placed') cfg.withdraw = true;
   if (!dest) cfg.autoPlace = false;
@@ -312,13 +344,15 @@ window.setMinerTransfer = function (wname, mid, dest) {
 window.toggleMinerPlace = function (wname, mid) {
   const cfg = getMinerActionConfig(wname, mid);
   const willActivate = !cfg.autoPlace;
+  const w = state.wallets.find(x => x.name === wname);
 
   if (willActivate && cfg.type === 'placed') {
     if (!cfg.withdraw) {
       showToast("Please select 'Withdraw' first to be able to replace this miner.", "info");
       return;
     }
-    if (!cfg.transferDest) {
+    const isSameWallet = cfg.transferDest && w && cfg.transferDest.toLowerCase() === w.address.toLowerCase();
+    if (!cfg.transferDest || isSameWallet) {
       showToast("Withdrawing to replace in the same spot makes no sense. Use transfer to place it elsewhere.", "info");
       return;
     }
@@ -329,32 +363,29 @@ window.toggleMinerPlace = function (wname, mid) {
   updateMinerModalSimulation();
 };
 
-/* ─────────────────────────────────────────────────────────────────
-   BULK ACTIONS
-   ───────────────────────────────────────────────────────────────── */
-
-window.renderBulkActionsHtml = function(wname) {
-  // Only show buttons if there are NFTs in the wallet
+window.renderBulkActionsHtml = function(wname, isInventory = false) {
   const totalItems = countAvailableItems([wname]);
   if (totalItems === 0) return "";
 
-  const walletOptions = state.wallets.map(optW => {
-    const addrMask = state.privacyEnabled ? '0x...' : (optW.address.slice(0, 6) + '...' + optW.address.slice(-4));
-    return `<option value="${optW.address}">${optW.name} - ${addrMask}</option>`;
-  }).join('');
+  const { anyTransfer } = getWalletTransferSummary(wname);
+  const label = anyTransfer ? '-- Cancel All Transfers --' : '-- Transfer All --';
+  const targetType = isInventory ? 'owned' : 'all';
 
   return `
     <div class="mm-bulk-actions">
+      ${!isInventory ? `
       <button class="mm-ap-btn withdraw mm-bulk-btn" onclick="bulkToggleWithdraw('${wname}')" title="Toggle Withdraw for all placed NFTs">
         <span class="mm-ap-btn-label">Withdraw All</span>
       </button>
+      ` : ''}
       
-      <select name="Wallet Destination" class="mm-ap-select mm-bulk-select" onchange="bulkSetTransfer('${wname}', this.value); this.value='';" title="Transfer all NFTs to...">
-        <option value="">-- Transfer All --</option>
-        ${walletOptions}
+      <select name="Wallet Destination" class="mm-ap-select mm-bulk-select privacy-random" data-bulk-wallet="${wname}" onchange="bulkSetTransfer('${wname}', this.value, '${targetType}')" title="Transfer all NFTs to...">
+        <option value="" class="privacy-random">${label}</option>
+        <option value="mixed" class="hidden privacy-random" disabled>${label}</option>
+        ${getTransferOptionsHtml(wname)}
       </select>
 
-      <button class="mm-ap-btn place mm-bulk-btn" onclick="bulkTogglePlace('${wname}')" title="Toggle Place for all NFTs">
+      <button class="mm-ap-btn place mm-bulk-btn" onclick="bulkTogglePlace('${wname}', '${targetType}')" title="Toggle Place for all NFTs">
         <span class="mm-ap-btn-label">Place All</span>
       </button>
     </div>
@@ -377,22 +408,24 @@ window.bulkToggleWithdraw = function(wname) {
   updateMinerModalSimulation();
 };
 
-window.bulkSetTransfer = function(wname, dest) {
-  if (!dest) return;
+window.bulkSetTransfer = function(wname, dest, targetType = 'all') {
   const w = state.wallets.find(x => x.name === wname);
   const info = state.walletMiners[w.address.toLowerCase()];
   if (!info) return;
 
   // Placed
-  (info.placed || []).forEach(m => {
-    const cfg = getMinerActionConfig(wname, m.id, m, 'placed');
-    cfg.transferDest = dest;
-    cfg.withdraw = true;
-    syncMinerControlsUI(wname, m.id);
-  });
+  if (targetType === 'all' || targetType === 'placed') {
+    (info.placed || []).forEach(m => {
+      const cfg = getMinerActionConfig(wname, m.id, m, 'placed');
+      cfg.transferDest = dest;
+      if (dest) cfg.withdraw = true;
+      if (!dest) cfg.autoPlace = false;
+      syncMinerControlsUI(wname, m.id);
+    });
+  }
 
   // Owned 
-  if (info.owned) {
+  if ((targetType === 'all' || targetType === 'owned') && info.owned) {
       Object.entries(info.owned).forEach(([cIdx, ids]) => {
           const typeData = state.minerTypes[cIdx] || {};
           let nftContract = typeData.nftContract;
@@ -405,6 +438,7 @@ window.bulkSetTransfer = function(wname, dest) {
               const m = { id: tokenId, gameId: null, nftTokenId: tokenId, cIdx, power: typeData.power, hashrate: typeData.hashrate, nftContract };
               const cfg = getMinerActionConfig(wname, tokenId, m, 'owned');
               cfg.transferDest = dest;
+              if (!dest) cfg.autoPlace = false;
               syncMinerControlsUI(wname, tokenId);
           });
       });
@@ -412,30 +446,37 @@ window.bulkSetTransfer = function(wname, dest) {
   updateMinerModalSimulation();
 };
 
-window.bulkTogglePlace = function(wname) {
+window.bulkTogglePlace = function(wname, targetType = 'all') {
   const w = state.wallets.find(x => x.name === wname);
   const info = state.walletMiners[w.address.toLowerCase()];
   if (!info) return;
 
   let anyNotPlacing = false;
-  if (info.placed && info.placed.some(m => !getMinerActionConfig(wname, m.id).autoPlace)) anyNotPlacing = true;
-  if (!anyNotPlacing && info.owned) {
-      Object.values(info.owned).forEach(ids => {
-          if (ids.some(tid => !getMinerActionConfig(wname, tid).autoPlace)) anyNotPlacing = true;
+  if (targetType === 'all' || targetType === 'placed') {
+      if (info.placed && info.placed.some(m => {
+          const cfg = getMinerActionConfig(wname, m.id);
+          return cfg.mt?.category !== 'external_nft' && !cfg.autoPlace;
+      })) anyNotPlacing = true;
+  }
+  if (!anyNotPlacing && (targetType === 'all' || targetType === 'owned') && info.owned) {
+      Object.entries(info.owned).forEach(([cIdx, ids]) => {
+          const mt = getMinerLabel(null, cIdx);
+          if (mt?.category !== 'external_nft') {
+              if (ids.some(tid => !getMinerActionConfig(wname, tid).autoPlace)) anyNotPlacing = true;
+          }
       });
   }
 
-  (info.placed || []).forEach(m => {
-    const cfg = getMinerActionConfig(wname, m.id, m, 'placed');
-    if (anyNotPlacing) {
-        if (!cfg.withdraw) cfg.withdraw = true;
-        // Logic check: if no transfer, placing back on same spot is blocked in single toggle but for bulk, we apply and let simulation/validation show the impact.
-    }
-    cfg.autoPlace = anyNotPlacing;
-    syncMinerControlsUI(wname, m.id);
-  });
+  if (targetType === 'all' || targetType === 'placed') {
+      (info.placed || []).forEach(m => {
+        const cfg = getMinerActionConfig(wname, m.id, m, 'placed');
+        if (anyNotPlacing && !cfg.withdraw) cfg.withdraw = true;
+        cfg.autoPlace = anyNotPlacing;
+        syncMinerControlsUI(wname, m.id);
+      });
+  }
 
-  if (info.owned) {
+  if ((targetType === 'all' || targetType === 'owned') && info.owned) {
       Object.entries(info.owned).forEach(([cIdx, ids]) => {
           const typeData = state.minerTypes[cIdx] || {};
           let nftContract = typeData.nftContract;
@@ -447,8 +488,11 @@ window.bulkTogglePlace = function(wname) {
           ids.forEach(tokenId => {
               const m = { id: tokenId, gameId: null, nftTokenId: tokenId, cIdx, power: typeData.power, hashrate: typeData.hashrate, nftContract };
               const cfg = getMinerActionConfig(wname, tokenId, m, 'owned');
-              cfg.autoPlace = anyNotPlacing;
-              syncMinerControlsUI(wname, tokenId);
+              // Only toggle place for real miners
+              if (cfg.mt?.category !== 'external_nft') {
+                cfg.autoPlace = anyNotPlacing;
+                syncMinerControlsUI(wname, tokenId);
+              }
           });
       });
   }
@@ -474,12 +518,6 @@ function renderMinerControlsHtml(wname, m, type, isPanel = false) {
   const nftIdPart = (m.nftTokenId !== undefined && m.nftTokenId !== null) ? `NFT #<span class="privacy-data">${m.nftTokenId}</span>` : '';
   const gameIdPart = (m.gameId !== undefined && m.gameId !== null) ? `MINER #<span class="privacy-data">${m.gameId}</span> ` : '';
 
-  const walletOptions = state.wallets.map(optW => {
-    const addrMask = state.privacyEnabled ? '0x...' : (optW.address.slice(0, 6) + '...' + optW.address.slice(-4));
-    const selAttr = optW.address.toLowerCase() === cfg.transferDest.toLowerCase() ? 'selected' : '';
-    return `<option value="${optW.address}" ${selAttr}>${optW.name} - ${addrMask}</option>`;
-  }).join('');
-
   const controlsHtml = `
     <div class="mm-ap-info">
       ${img}
@@ -489,6 +527,12 @@ function renderMinerControlsHtml(wname, m, type, isPanel = false) {
         <div class="mm-ap-miners-details">
           ${mt?.category === 'external_nft' ? 'Inventory NFT (Non-miner)' : `⛏️ ${m.hashrate || 0} MH/s <div class="refbar-sep"></div> ⚡ ${powerW} W`}
         </div>
+        ${m.listing ? `
+        <div class="mm-ap-miners-details mm-listing-info">
+          Listed on marketplace @ ${m.listing.priceDisplay} ${m.listing.currencySymbol}
+          <div class="refbar-sep"></div> ⏳ ${m.listing.timeRemainingStr}
+        </div>
+        ` : ''}
       </div>
     </div>
     
@@ -501,9 +545,9 @@ function renderMinerControlsHtml(wname, m, type, isPanel = false) {
         </div>
       ` : ''}
       <div class="mm-ap-group">
-        <select name="Wallet Destination" class="mm-ap-select ${cfg.transferDest ? 'active' : ''}" onchange="setMinerTransfer('${wname}', '${m.id}', this.value)">
-          <option value="">-- Transfer --</option>
-          ${walletOptions}
+        <select name="Wallet Destination" class="mm-ap-select privacy-random ${cfg.transferDest ? 'active' : ''}" onchange="setMinerTransfer('${wname}', '${m.id}', this.value)">
+          <option value="">${cfg.transferDest ? '-- Cancel --' : '-- Transfer --'}</option>
+          ${getTransferOptionsHtml(wname, cfg.transferDest)}
         </select>
       </div>
       ${mt?.category !== 'external_nft' ? `
@@ -525,6 +569,46 @@ function buildMinerRowHtml(w, m, mt, type = 'placed') {
 }
 
 /* ─────────────────────────────────────────────────────────────────
+   HELPERS & UI SYNC
+   ───────────────────────────────────────────────────────────────── */
+
+/**
+ * Generate common wallet destination options for dropdowns.
+ */
+function getTransferOptionsHtml(currentWName, selectedDest = "") {
+  const currentW = state.wallets.find(x => x.name === currentWName);
+  return state.wallets.map(optW => {
+    const isCurrent = currentW && optW.address.toLowerCase() === currentW.address.toLowerCase();
+    const shortAddr = optW.address.slice(0, 6) + '...' + optW.address.slice(-4);
+    const disabledAttr = isCurrent ? 'disabled' : '';
+    const labelSuffix = isCurrent ? '(Current) ' : '';
+    const currentClass = isCurrent ? 'class="mm-ap-select-current privacy-random privacy-data"' : '';
+    const selAttr = optW.address.toLowerCase() === (selectedDest || "").toLowerCase() ? 'selected' : '';
+    return `<option value="${optW.address}" ${disabledAttr} ${currentClass} ${selAttr} class="privacy-random">${labelSuffix}${optW.name} - ${shortAddr}</option>`;
+  }).join('');
+}
+
+/**
+ * Get a summary of the transfer state for a wallet.
+ */
+function getWalletTransferSummary(wname) {
+    const w = state.wallets.find(x => x.name === wname);
+    const info = state.walletMiners[w?.address.toLowerCase()];
+    if (!info) return { anyTransfer: false, uniqueDests: [] };
+    
+    const configs = [
+        ...(info.placed || []).map(m => state.minerBatchConfig[`${wname}:${m.id}`]),
+        ...(info.owned ? Object.values(info.owned).flat().map(tid => state.minerBatchConfig[`${wname}:${tid}`]) : [])
+    ].filter(Boolean);
+    
+    const dests = configs.map(c => c.transferDest || "");
+    const uniqueDests = [...new Set(dests)];
+    const anyTransfer = dests.some(d => d !== "");
+    
+    return { anyTransfer, uniqueDests };
+}
+
+/* ─────────────────────────────────────────────────────────────────
    GRID SELECTION
    ───────────────────────────────────────────────────────────────── */
 
@@ -542,7 +626,8 @@ window.selectGridMiner = function (id, wname) {
   slot.classList.add('selected');
 
   // Render controls in the bottom panel
-  panel.innerHTML = renderMinerControlsHtml(wname, m, 'placed', true);
+  const listing = (info.listings || []).find(l => l.assetContract.toLowerCase() === m.nftContract?.toLowerCase() && l.tokenId == m.nftTokenId);
+  panel.innerHTML = renderMinerControlsHtml(wname, { ...m, listing }, 'placed', true);
   panel.classList.remove('hidden');
 };
 
@@ -579,21 +664,22 @@ window.updateMinerModalSimulation = function () {
     Object.values(state.minerBatchConfig).forEach(cfg => {
       const wName = cfg.wname;
       const m = cfg.m;
+      const isMiner = cfg.mt?.category !== 'external_nft';
       const pwr = parseInt(m.powerConsumption || m.power || 0);
 
       if (cfg.type === 'placed' && cfg.withdraw) {
         hasAction = true;
         if (sim[wName]) { sim[wName].deltaM -= 1; sim[wName].deltaP -= pwr; }
-        if (cfg.transferDest && cfg.autoPlace) {
+        if (cfg.transferDest && cfg.autoPlace && isMiner) {
           const destW = state.wallets.find(x => x.address.toLowerCase() === cfg.transferDest.toLowerCase());
           if (destW && sim[destW.name]) { sim[destW.name].deltaM += 1; sim[destW.name].deltaP += pwr; }
         }
       } else if (cfg.type === 'owned') {
-        if (cfg.transferDest && cfg.autoPlace) {
+        if (cfg.transferDest && cfg.autoPlace && isMiner) {
           hasAction = true;
           const destW = state.wallets.find(x => x.address.toLowerCase() === cfg.transferDest.toLowerCase());
           if (destW && sim[destW.name]) { sim[destW.name].deltaM += 1; sim[destW.name].deltaP += pwr; }
-        } else if (!cfg.transferDest && cfg.autoPlace) {
+        } else if (!cfg.transferDest && cfg.autoPlace && isMiner) {
           hasAction = true;
           if (sim[wName]) { sim[wName].deltaM += 1; sim[wName].deltaP += pwr; }
         } else if (cfg.transferDest) {

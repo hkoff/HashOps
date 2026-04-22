@@ -234,15 +234,15 @@ function morphDOM(oldNode, newNode) {
 
 /**
  * Remove children of `parent` whose IDs are not in `activeIds`.
- * Applies a `.removing` class first for exit animations.
+ * Applies a `.closing` class first for exit animations.
  */
 function cleanupElements(parent, activeIds, delay = 500) {
   const children = Array.from(parent.children).filter(c => c.id);
   children.forEach(child => {
-    if (!activeIds.includes(child.id) && !child.classList.contains('removing')) {
-      child.classList.add('removing');
+    if (!activeIds.includes(child.id) && !child.classList.contains('closing')) {
+      child.classList.add('closing');
       setTimeout(() => { 
-        if (child.parentNode === parent && child.classList.contains('removing')) {
+        if (child.parentNode === parent && child.classList.contains('closing')) {
           child.remove(); 
         }
       }, delay);
@@ -344,7 +344,8 @@ function showToast(msg, type = 'success') {
  * @param {object} opts { type: 'warning'|'error'|'info'|'success', title, message, section: 'inventory'|'global', persistent: bool }
  */
 function registerAlert(id, opts) {
-  if (state.dismissedAlerts.has(id)) return;
+  // Rule: Always showable unless already visible
+  if (state.alerts[id]) return;
   state.alerts[id] = { ...opts, id };
   const section = opts.section || 'global';
   const trayId = section === 'global' ? 'global-alerts-tray' : `alerts-tray-${section}`;
@@ -373,16 +374,14 @@ function removeAlert(id) {
         if (currentCount === 0) {
           tray.classList.add('hidden');
         }
-      }, 400);
+      }, 1300);
     }
     renderAlertTrays(tray, section);
   }
 }
 
-/** Permanently dismisses an alert for this user. */
+/** Dismisses an alert from the UI. It will reappear if the backend pushes it again. */
 function dismissAlert(id) {
-  state.dismissedAlerts.add(id);
-  localStorage.setItem('dismissed_alerts', JSON.stringify(Array.from(state.dismissedAlerts)));
   removeAlert(id);
 }
 
@@ -406,7 +405,7 @@ function renderAlertTrays(container, section = 'global') {
     `;
     upsertElement(container, id, `system-alert alert-${alert.type}`, bannerHtml);
   }
-  cleanupElements(container, activeIds);
+  cleanupElements(container, activeIds, 1300);
   updateInteractiveState();
 }
 
@@ -468,3 +467,4 @@ function copyToClipboard(text) {
 window.copyToClipboard = copyToClipboard;
 window.toggleDebugLogs = toggleDebugLogs;
 window.dismissAlert = dismissAlert;
+window.registerAlert = registerAlert;

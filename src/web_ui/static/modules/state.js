@@ -19,7 +19,6 @@ const state = {
 
   /* Component: System Alerts (Banners) ─────────────────────────── */
   alerts: {},              // { id: { type, title, message, section, persistent } }
-  dismissedAlerts: new Set(JSON.parse(localStorage.getItem('dismissed_alerts') || '[]')),
 
   /* Per-wallet runtime data ────────────────────────────────────── */
   walletStatuses: {},      // { walletName: 'idle'|'running'|'success'|'error'|... }

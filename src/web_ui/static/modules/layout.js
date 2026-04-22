@@ -87,6 +87,7 @@ function togglePrivacy() {
   state.privacyEnabled = !state.privacyEnabled;
   localStorage.setItem('privacy_mode', state.privacyEnabled);
   applyPrivacy();
+  if (typeof window.updatePrivacyNodes === 'function') window.updatePrivacyNodes();
 }
 
 /**

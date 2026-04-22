@@ -11,6 +11,10 @@
     updatePrivacyNodes();
   };
 
+  function maskAddress(text) {
+    return text.replace(/0x[a-fA-F0-9]{3,}\.\.\.[a-fA-F0-9]{3,}/g, '0x...');
+  }
+
   function applyRandomPrivacyUI() {
     const btn = document.getElementById('btn-toggle-random');
     if (btn) {
@@ -157,14 +161,19 @@
 
   function updatePrivacyNodes() {
     const modeOn = window.randomPrivacyEnabled;
+    const blurOn = (typeof state !== 'undefined' && state.privacyEnabled) || (window.state && window.state.privacyEnabled);
     
-    document.querySelectorAll('.privacy-data').forEach(el => {
+    document.querySelectorAll('.privacy-data, .privacy-random').forEach(el => {
       // Avoid modifying nodes that are inside script or style tags
-      if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE') return;
+      if (el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'SELECT') return;
 
       // Optimization: Skip if an ancestor is already .privacy-data. 
       // The parent's scrambling logic (using innerHTML) will handle this node's content.
-      if (el.parentElement && el.parentElement.closest('.privacy-data')) return;
+      // EXCEPTION: Always process children of SELECT because we don't scramble SELECT itself.
+      if (el.parentElement) {
+        const closestPrivacy = el.parentElement.closest('.privacy-data');
+        if (closestPrivacy && closestPrivacy.tagName !== 'SELECT') return;
+      }
 
       if (!el.hasAttribute(originalDataKey)) {
         el.setAttribute(originalDataKey, el.innerHTML); // Save HTML!
@@ -172,7 +181,12 @@
       
       const orig = el.getAttribute(originalDataKey);
       
-      if (modeOn) {
+      // EXCEPTION: Don't randomize data inside mm-sim-row (Facility Simulation)
+      const skipRandom = el.closest('.mm-sim-row');
+      
+      const isRandomOnly = el.classList.contains('privacy-random');
+      
+      if (modeOn && !skipRandom) {
         if (!el.hasAttribute('data-scrambled')) {
           const scrambled = scrambleText(el, orig);
           if (scrambled !== orig) {
@@ -188,6 +202,13 @@
              }
           }
         }
+      } else if (blurOn && isRandomOnly && !skipRandom) {
+          // Apply "0x..." masking instead of blur for .privacy-random
+          const masked = maskAddress(orig);
+          if (el.innerHTML !== masked) {
+             el.innerHTML = masked;
+          }
+          el.setAttribute('data-scrambled', 'true');
       } else {
         if (el.hasAttribute('data-scrambled')) {
           if (el.innerHTML !== orig) {
@@ -199,6 +220,8 @@
     });
   }
 
+  window.updatePrivacyNodes = updatePrivacyNodes;
+
   const observer = new MutationObserver((mutations) => {
     let contentChanged = false;
 
@@ -209,7 +232,8 @@
       }
     }
 
-    if (window.randomPrivacyEnabled && contentChanged) {
+    const blurOn = (typeof state !== 'undefined' && state.privacyEnabled) || (window.state && window.state.privacyEnabled);
+    if ((window.randomPrivacyEnabled || blurOn) && contentChanged) {
        observer.disconnect();
        updatePrivacyNodes();
        observer.observe(document.body, { childList: true, subtree: true, characterData: true });

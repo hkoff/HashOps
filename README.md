@@ -93,7 +93,7 @@ But the announcement of the Hashathon made me want to share, refine what I’d b
 | 💎 **Claim Rewards** | Batch-claim pending hCASH rewards from all wallets, auto-transfer to main wallet if above threshold |
 | ⛏️ **Manage Miners (Batch)** | Withdraw, Transfer & Place miner NFTs in mass across wallets with a single modal — complete Withdraw → Transfer → Place pipelines |
 | ⛽ **Dispatch Gas Fees** | Smart AVAX distribution algorithm that auto-balances gas across all wallets using a debt-matching system |
-| 📊 **Live Dashboard** | Real-time wallet cards, miner inventory (grid + list views), SSE-powered log terminal |
+| 📊 **Live Dashboard** | Real-time tracking of assets across 3 logical states: **In-Game** (active miners), **Inventory** (ready to place), and **Marketplace** (actively listed). Includes grid/list views & SSE terminal |
 | 🔒 **Privacy Mode** | One-click toggle to hide all sensitive data (balances, addresses) from the UI |
 | 🔄 **Multicall3 Optimization** | All blockchain reads are batched via Multicall3 — fetching balances, rewards, facility data & miners for 50 wallets in a single RPC call |
 | 🧠 **Dynamic ABI Resolution** | Contract addresses & ABIs are fetched from the official HashCash API at startup — no hardcoded addresses, fully future-proof |
@@ -175,7 +175,7 @@ HashOps/
 └── src/
     ├── config.py                      # All constants, thresholds & paths
     ├── core/
-    │   ├── blockchain.py                    # RPC reads, Multicall3 batching, NFT ID resolution
+    │   ├── blockchain.py                    # RPC reads, Multicall3 batching, Marketplace V3 sync & NFT ID resolution
     │   ├── gas.py                           # EIP-1559 gas calculation with safety cap
     │   ├── hcash_api.py                     # Official HashCash API client (contracts + ABIs)
     │   ├── security.py                      # Universal Integrity Guard (Whitelist & Anchors)

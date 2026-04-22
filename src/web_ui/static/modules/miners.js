@@ -401,12 +401,47 @@ function renderMinersOverview() {
       }
       bodyHtml += `</div>`;
 
-      // ── Inventory NFTs ──
+      // ── Marketplace Listings ──
+      const listings = info.listings || [];
+      if (listings.length) {
+        bodyHtml += `<div class="mov-miners-group">`;
+        bodyHtml += `<div class="mov-section-label">🛒 Listed on Marketplace [${listings.length}]</div><div class="mov-chips">`;
+        for (const l of listings) {
+          const mt = getMinerLabel(l.assetContract, l.minerIndex);
+          const name = mt?.name || `NFT #${l.tokenId}`;
+          const img = mt?.image ? `<img src="${mt.image}" class="miner-chip-img" alt="" onerror="this.src=this.src.replace('.png','.gif'); this.onerror=function(){this.style.display='none'};">` : '';
+          
+          bodyHtml += `<div class="miner-chip listed" title="${name} #${l.tokenId} — Listed for ${l.priceDisplay} ${l.currencySymbol}">
+            ${img}<span class="miner-chip-name">${name}</span>
+            <span>#<span class="privacy-data">${l.tokenId}</span></span>
+            <span class="miner-chip-time">${l.timeRemainingStr}</span>
+          </div>`;
+        }
+        bodyHtml += '</div></div>';
+      }
+
+      // ── Inventory NFTs (Filtered: remove listed) ──
       bodyHtml += `<div class="mov-miners-group">`;
       const ownedEntries = Object.entries(owned || {});
-      if (ownedEntries.length) {
+      const filteredOwned = [];
+      
+      for (const [idx, tokenIds] of ownedEntries) {
+        const typeData = state.minerTypes[idx] || {};
+        const nftContract = typeData.nftContract?.toLowerCase();
+        
+        // Filter out IDs that appear in listings
+        const remainingIds = tokenIds.filter(tid => {
+          return !listings.some(l => l.assetContract.toLowerCase() === nftContract && l.tokenId == tid);
+        });
+        
+        if (remainingIds.length > 0) {
+          filteredOwned.push([idx, remainingIds]);
+        }
+      }
+
+      if (filteredOwned.length) {
         bodyHtml += `<div class="mov-section-label">📦 Inventory NFTs</div><div class="mov-chips">`;
-        for (const [idx, tokenIds] of ownedEntries) {
+        for (const [idx, tokenIds] of filteredOwned) {
           const count = tokenIds.length;
           const mt = getMinerLabel(null, idx);
           const name = mt?.name || `Type #${idx}`;
@@ -440,7 +475,7 @@ function renderMinersOverview() {
           <svg-icon name="chevron-right" class="chevron-icon svg-size-sm"></svg-icon>
         </button>
         <span class="mov-wallet-name">${w.name}${w.is_main ? '<span class="badge-main">MAIN</span>' : ''}</span>
-        <span class="mov-wallet-addr privacy-data"><a href="${state.config.debank_url}${w.address}" target="_blank" onclick="event.stopPropagation()" class="addr-link" title="DeBank Profile"><span class="privacy-data">${short}</span></a></span>
+        <span class="mov-wallet-addr privacy-random"><a href="${state.config.debank_url}${w.address}" target="_blank" onclick="event.stopPropagation()" class="addr-link" title="DeBank Profile"><span class="privacy-random">${short}</span></a></span>
         <div class="mov-balances">
           <span class="mov-balance-token ${avax_balance > 0.0001 ? 'blue' : ''}">
             <img src="${state.config.avax_logo_url}" class="mov-asset-icon" alt="AVAX">

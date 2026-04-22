@@ -20,9 +20,19 @@ async function fetchActiveAlerts() {
   try {
     const res = await fetch('/api/system/alerts');
     const data = await res.json();
-    if (data.alerts && data.alerts.length > 0) {
-      appendLog(new Date().toLocaleTimeString(), `\u001b[36m[Sync] Restoring ${data.alerts.length} active system alerts...\u001b[0m`);
-      data.alerts.forEach(alert => {
+    const serverAlerts = data.alerts || [];
+    const serverIds = serverAlerts.map(a => a.id);
+
+    // 1. Remove alerts that are no longer on the server
+    Object.keys(state.alerts).forEach(id => {
+      if (!serverIds.includes(id)) {
+        removeAlert(id);
+      }
+    });
+
+    // 2. Add or Restore alerts from server
+    if (serverAlerts.length > 0) {
+      serverAlerts.forEach(alert => {
         registerAlert(alert.id, {
           type: alert.alert_type,
           title: alert.title,

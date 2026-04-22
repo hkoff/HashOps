@@ -49,7 +49,7 @@
     /* --- Colors: Text --- */
     --text-rgb: 226, 232, 240;
     --text-sec-rgb: 100, 116, 139;
-    --text-dim-rgb: 51, 65, 85;
+    --text-dim-rgb: 74, 91, 116;
 
     --text-primary: rgb(var(--text-rgb));
     --text-sec: rgb(var(--text-sec-rgb));
@@ -956,7 +956,7 @@ body.privacy-mode .privacy-data {
     max-height: 4000px;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
+    overflow-y: auto;
     transition: all var(--transition-slow-eio);
     will-change: flex-basis, max-height;
     backface-visibility: hidden;
@@ -972,7 +972,6 @@ body.privacy-mode .privacy-data {
 .wallet-cards {
     animation: fadeIn 0.4s ease-out both;
     max-height: 4000px;
-    overflow: hidden;
     transition: opacity 0.35s ease, max-height 0.35s ease;
 }
 
@@ -1036,7 +1035,7 @@ body.privacy-mode .privacy-data {
     animation: fadeInScale 0.5s var(--ease-out-back) both;
     animation-delay: calc(var(--stagger, 0) * 0.08s);
 }
-.wdc.removing { 
+.wdc.closing { 
     animation: fadeOutDown 0.4s cubic-bezier(0.4, 0, 1, 1) both; 
     pointer-events: none; 
     z-index: 1;
@@ -1199,7 +1198,7 @@ body.privacy-mode .privacy-data {
 
 .miners-ov-wallet { border-bottom: 1px solid var(--border-soft); padding: var(--spacing-md) var(--spacing-xl); }
 .miners-ov-wallet.is-new { animation: fadeInScale 0.4s var(--ease-out-back) both; }
-.miners-ov-wallet.removing { animation: fadeOut 0.3s ease-in both; pointer-events: none; }
+.miners-ov-wallet.closing { animation: fadeOut 0.3s ease-in both; pointer-events: none; }
 
 .miners-ov-wallet-header {
     display: flex; align-items: center; gap: var(--spacing-sm);
@@ -1265,9 +1264,15 @@ body.privacy-mode .privacy-data {
 }
 .miner-chip.placed { background: rgba(var(--green-rgb), .06); border-color: rgba(var(--green-rgb), .25); color: var(--accent-green); }
 .miner-chip.owned { background: rgba(var(--blue-rgb), .06); border-color: rgba(var(--blue-rgb), .25); color: var(--accent-blue); }
+.miner-chip.listed { background: rgba(var(--cyan-rgb), .06); border-color: rgba(var(--cyan-rgb), .25); color: var(--accent-cyan); }
 .miner-chip-name { font-weight: 600; }
 .miner-chip-stats { color: var(--text-sec); font-size: var(--font-size-xs); font-weight: 600; }
 .miner-chip-coords { font-family: var(--font-mono); font-weight: 500; }
+.miner-chip-time { 
+    font-size: var(--font-size-2xs); font-weight: 700; text-transform: uppercase; 
+    background: rgba(var(--cyan-rgb), 0.15); padding: 0 6px; border-radius: var(--radius-xs); 
+    margin-left: auto;
+}
 
 .mov-fstat-sep { width: 1px; height: 12px; background: var(--border-soft); }
 
@@ -1299,11 +1304,14 @@ body.privacy-mode .privacy-data {
     flex-direction: column;
     gap: var(--spacing-sm);
     padding: var(--spacing-sm);
-    max-height: 20vh;
+    height: auto;
+    min-height: 10vh;
+    max-height: 25vh;
+    overflow: auto;
     opacity: 1;
-    overflow-y: auto;
-    transition: max-height 0.4s var(--ease-out-expo), 
-                padding 0.4s ease, 
+    transition: max-height 0.8s var(--ease-out-expo), 
+                min-height 0.8s var(--ease-out-expo), 
+                padding 0.8s ease, 
                 opacity 0.4s ease;
 }
 
@@ -1311,12 +1319,20 @@ body.privacy-mode .privacy-data {
 .alerts-tray:empty,
 .alerts-tray.closing,
 .alerts-tray.hidden {
+    min-height: 0;
     max-height: 0;
     padding-top: 0;
     padding-bottom: 0;
     opacity: 0;
     overflow: hidden;
     pointer-events: none;
+}
+
+.alerts-tray.closing {
+    transition: max-height 0.8s var(--ease-out-expo) 0.4s, 
+                min-height 0.8s var(--ease-out-expo) 0.4s, 
+                padding 0.8s ease 0.4s, 
+                opacity 0.4s ease;
 }
 
 .system-alert {
@@ -1326,10 +1342,18 @@ body.privacy-mode .privacy-data {
     gap: var(--spacing-lg);
     padding: var(--spacing-lg);
     border-radius: var(--radius-md);
+    min-height: 60px;
+    overflow: hidden;
     animation: slideDown 0.4s var(--ease-out-expo);
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
     backface-visibility: hidden;
     transform: translateZ(0);
+    transition: opacity 0.4s ease, 
+                transform 0.4s ease, 
+                height 0.8s var(--ease-out-expo), 
+                min-height 0.8s var(--ease-out-expo), 
+                padding 0.8s var(--ease-out-expo), 
+                margin 0.8s var(--ease-out-expo);
 }
 
 .system-alert.alert-warning {
@@ -1360,15 +1384,22 @@ body.privacy-mode .privacy-data {
 }
 .system-alert.alert-info .warning-icon { color: var(--accent-cyan); }
 
-.system-alert.removing {
+.system-alert.closing {
     opacity: 0;
-    max-height: 0;
+    height: 0;
+    min-height: 0;
+    border: 0;
     padding-top: 0;
     padding-bottom: 0;
-    margin-top: calc(-1 * var(--spacing-lg));
-    transform: translateY(-10px);
+    margin-bottom: calc(-1 * var(--spacing-sm));
+    transform: translateY(-10px) scale(0.98);
     pointer-events: none;
-    transition: all 0.4s var(--ease-out-expo);
+    transition: opacity 0.4s ease, 
+                transform 0.4s ease, 
+                height 0.8s var(--ease-out-expo) 0.4s, 
+                min-height 0.8s var(--ease-out-expo) 0.4s, 
+                padding 0.8s var(--ease-out-expo) 0.4s, 
+                margin 0.8s var(--ease-out-expo) 0.4s;
 }
 
 .warning-icon {
@@ -1483,6 +1514,8 @@ body.privacy-mode .privacy-data {
 .mm-ap-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-primary); font-size: var(--font-size-xl); font-weight: 700; }
 .mm-ap-id { line-height: normal; font-size: var(--font-size-xs); font-weight: 600; color: var(--text-sec); }
 .mm-ap-miners-details { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--spacing-sm); color: var(--text-sec); font-size: var(--font-size-sm); font-weight: 500; }
+.mm-listing-info { color: var(--accent-cyan); font-weight: 600; }
+.mm-listing-dates { opacity: 0.8; font-style: italic; font-size: var(--font-size-xs); }
 
 /* Dedicated Action Buttons */
 .mm-ap-controls { flex: 1 1 auto; display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: var(--spacing-sm); }
@@ -1518,7 +1551,9 @@ body.privacy-mode .privacy-data {
     padding: var(--spacing-md) var(--spacing-xl); border-radius: var(--radius-xs); color: var(--text-sec);
     font-weight: 500; transition: 0.25s ease-in-out;
 }
-.mm-ap-select option:hover, .mm-ap-select option:focus { background: rgba(var(--blue-rgb), 0.12); color: var(--accent-blue); outline: none; }
+.mm-ap-select option:disabled { opacity: 0.5; cursor: not-allowed; color: var(--text-dim); }
+.mm-ap-select option.mm-ap-select-current { color: var(--accent-cyan); font-weight: 600; }
+.mm-ap-select option:hover:not(:disabled), .mm-ap-select option:focus:not(:disabled) { background: rgba(var(--blue-rgb), 0.12); color: var(--accent-blue); outline: none; }
 .mm-ap-select option:checked { background: rgba(var(--blue-rgb), 0.2); color: var(--text-primary); font-weight: 700; justify-content: space-between; }
 .mm-ap-select option::checkmark { order: 1; }
 
