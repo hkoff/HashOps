@@ -13,6 +13,8 @@ secrets.env
 *.pfx
 user_preferences.json
 
+data/marketplace_cache.json
+
 llms-full.txt
 llms.txt
 

@@ -210,7 +210,7 @@ svg-icon[name="spin"],
 .miner-chip-img {
     width: 25px;
     height: 25px;
-    border-radius: var(--radius-xs);
+    border-radius: 5px;
     object-fit: cover;
     flex-shrink: 0;
 }
@@ -1265,6 +1265,7 @@ body.privacy-mode .privacy-data {
 .miner-chip.placed { background: rgba(var(--green-rgb), .06); border-color: rgba(var(--green-rgb), .25); color: var(--accent-green); }
 .miner-chip.owned { background: rgba(var(--blue-rgb), .06); border-color: rgba(var(--blue-rgb), .25); color: var(--accent-blue); }
 .miner-chip.listed { background: rgba(var(--cyan-rgb), .06); border-color: rgba(var(--cyan-rgb), .25); color: var(--accent-cyan); }
+.miner-chip.warning { background: rgba(var(--yellow-rgb), 0.1); border-color: var(--accent-yellow); color: var(--accent-yellow); }
 .miner-chip-name { font-weight: 600; }
 .miner-chip-stats { color: var(--text-sec); font-size: var(--font-size-xs); font-weight: 600; }
 .miner-chip-coords { font-family: var(--font-mono); font-weight: 500; }
@@ -1515,6 +1516,7 @@ body.privacy-mode .privacy-data {
 .mm-ap-id { line-height: normal; font-size: var(--font-size-xs); font-weight: 600; color: var(--text-sec); }
 .mm-ap-miners-details { display: flex; flex-direction: row; flex-wrap: wrap; align-items: center; gap: var(--spacing-sm); color: var(--text-sec); font-size: var(--font-size-sm); font-weight: 500; }
 .mm-listing-info { color: var(--accent-cyan); font-weight: 600; }
+.mm-listing-info-warning { color: var(--accent-yellow); font-weight: 800; }
 .mm-listing-dates { opacity: 0.8; font-style: italic; font-size: var(--font-size-xs); }
 
 /* Dedicated Action Buttons */

@@ -19,7 +19,10 @@ from src.core.blockchain import (
     get_contract_address, get_hcash_token_address,
     get_web3, get_game_main_contract, get_game_token_contract,
     check_connection, get_batch_wallets_miners_info,
+    get_marketplace_contract, get_multicall_contract,
+    enrich_wallets_with_marketplace
 )
+from src.services.marketplace_engine import sync_user_marketplace_listings
 from src.services.miner_cache import refresh_miner_cache_if_needed
 from src.actions.ui_state import register_wallet_names
 from src.web_ui.app import app, init_app_context, update_init_status, register_init_fn, set_cached_batch_data
@@ -41,9 +44,11 @@ def _discover_miners(w3, addresses, game_main, game_token, miner_types) -> dict:
     Returns the batch_data dict (address → miner info).
     """
     try:
+        # 1. Primary Wallet Discovery (Balances, Facilities, In-game Miners, API Inventory)
+        update_init_status(step="Discovering Wallet Assets...", percentage=45)
         batch_data = get_batch_wallets_miners_info(
             w3, addresses, game_main, game_token, miner_types,
-            on_detail=lambda msg: update_init_status(detail=msg)
+            include_marketplace=False
         )
 
         m_ingame    = 0
@@ -53,6 +58,7 @@ def _discover_miners(w3, addresses, game_main, game_token, miner_types) -> dict:
         facilities  = 0
         total       = len(batch_data)
 
+        # 2. Visual Discovery (Populate miner tray before marketplace sync)
         for wallet_idx, (addr, info) in enumerate(batch_data.items()):
             if info.get("facility") is not None:
                 facilities += 1
@@ -68,9 +74,6 @@ def _discover_miners(w3, addresses, game_main, game_token, miner_types) -> dict:
 
             # Owned NFTs (inventory)
             owned_data = info.get("owned", {})
-            listings = info.get("listings", [])
-            m_listed += len(listings)
-
             for idx_str, tokens in owned_data.items():
                 mt = miner_types.get(idx_str, {})
                 is_miner = mt.get("category") == "miner_nft"
@@ -87,10 +90,28 @@ def _discover_miners(w3, addresses, game_main, game_token, miner_types) -> dict:
                         "image": mt.get("nft_image", ""),
                     })
 
-            # Incremental progress (60% → 83%)
+            # Incremental progress (45% → 75%)
             if total > 0:
-                p = 60 + int(((wallet_idx + 1) / total) * 23)
+                p = 45 + int(((wallet_idx + 1) / total) * 30)
                 update_init_status(percentage=p)
+
+        # 3. Marketplace Synchronization
+        marketplace = get_marketplace_contract(w3)
+        if marketplace:
+            update_init_status(step="Syncing Marketplace Listings...", percentage=80)
+            mc = get_multicall_contract(w3)
+            listings = sync_user_marketplace_listings(w3, mc, marketplace)
+            
+            if listings:
+                update_init_status(detail=f"{len(listings)} active marketplace listings found.")
+            else:
+                update_init_status(detail="No active marketplace listings found.")
+            
+            enrich_wallets_with_marketplace(batch_data, listings, miner_types)
+            
+            # Re-calculate m_listed count after enrichment
+            for addr, info in batch_data.items():
+                m_listed += len(info.get("listings", []))
 
         # Summary
         total_assets = m_ingame + m_inventory + ext_nfts
@@ -171,7 +192,7 @@ def initialization_sequence():
 
             update_init_status(step="Loading Contract ABIs...")
             if by_cat.get("game_main"):
-                update_init_status(detail="hCASH Core contract indexed ✓", percentage=23)
+                update_init_status(detail="Club HashCash Core contract indexed ✓", percentage=23)
             if by_cat.get("game_token"):
                 update_init_status(detail="$hCASH Token contract indexed ✓", percentage=26)
             miner_nft_count = len(by_cat.get("miner_nft", []))

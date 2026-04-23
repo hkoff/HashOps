@@ -7,7 +7,8 @@
 # Communication patterns:
 #   1. REST endpoints     — The frontend fetches data and triggers actions via POST /api/run.
 #   2. SSE stream         — Real-time logs and action events are delegated to sse.py.
-#   3. Background threads — Actions run in daemon threads to avoid blocking Flask handlers.
+#   3. System Alerts      — Persistent UI warnings for critical issues are pushed via ui_alerts.py.
+#   4. Background threads — Actions run in daemon threads to avoid blocking Flask handlers.
 #
 # Thread safety:
 #   _state_lock   → protects _app_state (idle/running/done)
@@ -30,7 +31,7 @@ from web3 import Web3
 
 import src.config as config
 from src.services.logger_setup import logger
-from src.utils.helpers import red_bold, yellow_bold, magenta_bold, green_bold
+from src.utils.helpers import cyan_bold, red_bold, yellow_bold, magenta_bold, green_bold
 from src.actions.ui_state import (
     get_wallet_statuses, get_wallet_details, get_miner_journeys, 
     get_generic_cards, reset_ui_state, _init_detail, _prepare_miner_journey
@@ -422,12 +423,12 @@ def api_miners_batch():
         if not addresses:
             return jsonify({"error": "No addresses provided"}), 400
 
+        logger.info(cyan_bold(f"[API] Manual refresh requested for {len(addresses)} wallet(s)."))
         if _w3 is None or _game_main is None:
             return jsonify({"error": "RPC not initialized"}), 503
 
         batch_results = get_batch_wallets_miners_info(
-            _w3, addresses, _game_main, _game_token, _miner_types,
-            on_detail=lambda msg: _broadcast({"type": "log", "message": f"\u001b[31m{msg}\u001b[0m", "level": "ERROR"})
+            _w3, addresses, _game_main, _game_token, _miner_types
         )
 
         # Update debt detection cache (piggybacks on this existing RPC call)
@@ -713,10 +714,9 @@ def _finish_action(msg: dict) -> None:
 
     try:
         addresses = [w["address"] for w in _wallets]
-        logger.debug(yellow_bold(f"[APP] Post-action synchronization for {len(addresses)} wallets..."))
+        logger.info(yellow_bold(f"[APP] Starting post-action global refresh for {len(addresses)} wallet(s)..."))
         data = get_batch_wallets_miners_info(
-            _w3, addresses, _game_main, _game_token, _miner_types,
-            on_detail=lambda msg: _broadcast({"type": "log", "message": f"\u001b[31m{msg}\u001b[0m", "level": "ERROR"})
+            _w3, addresses, _game_main, _game_token, _miner_types
         )
 
         # Update debt detection cache (piggybacks on this existing RPC call)

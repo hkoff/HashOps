@@ -29,12 +29,12 @@ function renderDataCards() {
 
     const id = `wdc-wallet-${name}`;
     activeIds.push(id);
-    const html = getWalletCardHtml(name, d);
     
-    // Compute status CSS class locally for maximum stability
     const isDone = d.status === 'success';
     const isSkipped = d.status === 'skipped';
     const cardStatus = d.status === 'error' ? 'error' : (isSkipped ? 'skipped' : (isDone ? 'success' : 'running'));
+
+    const html = getWalletCardHtml(name, d, cardStatus);
     
     // Stable stagger: use wallet's original index to prevent re-animation on list shifts
     upsertElement(walletCards, id, `wdc status-${cardStatus}`, html, 'div', w.index || 0);
@@ -45,11 +45,12 @@ function renderDataCards() {
     const id = `wdc-miner-${m_id}`;
     activeIds.push(id);
     const m = journeys[m_id];
-    const html = getMinerCardHtml(m_id, m);
     
     const hasError = m.steps.some(s => s.status === 'error');
     const isAllDone = m.planned.length > 0 && m.planned.every(p => m.steps.some(s => s.type === p && s.status === 'success'));
     const cardStatus = hasError ? 'error' : (isAllDone ? 'success' : 'running');
+
+    const html = getMinerCardHtml(m_id, m, cardStatus);
 
     // Stable stagger: use journey array index + wallet count offset
     upsertElement(walletCards, id, `wdc status-${cardStatus}`, html, 'div', state.wallets.length + idx);
@@ -89,11 +90,9 @@ function renderDataCards() {
 }
 
 /* ── Wallet Card HTML ────────────────────────────────────────── */
-function getWalletCardHtml(name, d) {
+function getWalletCardHtml(name, d, cardStatus) {
   const short = d.address ? d.address.slice(0, 6) + '...' + d.address.slice(-4) : '';
-  const isDone = d.status === 'success';
-  const isSkipped = d.status === 'skipped';
-  const cardStatus = d.status === 'error' ? 'error' : (isSkipped ? 'skipped' : (isDone ? 'success' : 'running'));
+  const isSkipped = cardStatus === 'skipped';
 
   // --- 1. Snapshot Layer (Rigid structure) ---
   let snapshotsHtml = '';
@@ -146,8 +145,11 @@ function getWalletCardHtml(name, d) {
 
   // --- 3. Transaction Details ---
   let txRows = '';
-  if (d.claim_tx) txRows += txRow(state.actionNames[state.actionKeys.CLAIM], d.claim_tx, d.claim_status);
-  if (d.transfer_tx) txRows += txRow('Transfer hCASH', d.transfer_tx, d.transfer_status);
+  let claimGroup = '';
+  if (d.claim_tx) claimGroup += txRow(state.actionNames[state.actionKeys.CLAIM], d.claim_tx, d.claim_status);
+  if (d.transfer_tx) claimGroup += txRow('Transfer hCASH', d.transfer_tx, d.transfer_status);
+  if (claimGroup) txRows += dataGroup('hCASH Action', claimGroup, 'gift');
+  
   txRows += avaxTxsHtml;
   
   const txContainerHtml = txRows ? `<div class="wdc-txs">${txRows}</div>` : '';
@@ -199,38 +201,27 @@ function getAvaxTransfersMarkup(transferDict) {
 
   let pills = '';
   if (totalIn > 0) {
-    const cls = statusIn === 'error' ? 'status-error' : (statusIn === 'pending' ? 'status-running' : 'status-success-cyan');
-    pills += pill('Reception', `<span class="privacy-data">${formatDecimal(totalIn, 4)}</span>`, cls);
+    pills += pill('Reception', `<span class="privacy-data">${formatDecimal(totalIn, 4)}</span>`, statusClass(statusIn === 'success' ? 'success-cyan' : statusIn));
   }
   if (totalOut > 0) {
-    const cls = statusOut === 'error' ? 'status-error' : (statusOut === 'pending' ? 'status-running' : 'status-success-cyan');
-    pills += pill('Transfer', `<span class="privacy-data">${formatDecimal(totalOut, 4)}</span>`, cls);
+    pills += pill('Transfer', `<span class="privacy-data">${formatDecimal(totalOut, 4)}</span>`, statusClass(statusOut === 'success' ? 'success-cyan' : statusOut));
   }
 
   let txsHtml = '';
   Object.entries(groups).forEach(([walletAction, txs]) => {
-    txsHtml += `<div class="wdc-data-group">
-      <div class="wdc-wallet-label flex-inline">
-        <svg-icon name="wallet" class="svg-size-sm"></svg-icon>
-        ${walletAction}
-      </div>`;
-    txs.forEach(tx => {
+    const groupContent = txs.map(tx => {
       let actionName = tx.type === 'in' ? 'Reception' : 'Transfer';
       let showTx = tx.type === 'in' ? null : tx.tx;
-      txsHtml += txRow(actionName, showTx, tx.status);
-    });
-    txsHtml += `</div>`;
+      return txRow(actionName, showTx, tx.status);
+    }).join('');
+    txsHtml += dataGroup(walletAction, groupContent, 'wallet');
   });
 
   return { pills, txs: txsHtml };
 }
 
 /* ── Miner Journey Card HTML ─────────────────────────────────── */
-function getMinerCardHtml(m_id, m) {
-  const isAllDone = m.planned.length > 0 && m.planned.every(p => m.steps.some(s => s.type === p && s.status === 'success'));
-  const hasError = m.steps.some(s => s.status === 'error');
-  const cardStatus = hasError ? 'error' : (isAllDone ? 'success' : 'running');
-  const statusLabelText = hasError ? '✗ Error' : (isAllDone ? '✓ Done' : '<svg-icon name="spin" class="spin-icon-svg svg-size-sm"></svg-icon> Processing');
+function getMinerCardHtml(m_id, m, cardStatus) {
 
   // Header
   const imgHtml = m.image ? `<img src="${m.image}" class="miner-chip-img-big" onerror="this.style.display='none'">` : '';
@@ -256,20 +247,14 @@ function getMinerCardHtml(m_id, m) {
 
   let stepsHtml = '';
   Object.entries(groups).forEach(([walletName, steps]) => {
-    stepsHtml += `
-      <div class="wdc-data-group">
-        <div class="wdc-wallet-label flex-inline">
-          <svg-icon name="wallet" class="svg-size-sm"></svg-icon>
-          ${walletName}
-        </div>
-        ${steps.map(s => {
+    const groupContent = steps.map(s => {
       let label = s.type;
       if (s.type === 'Transfer' && s.dest) label += ` ➔ ${s.dest}`;
       if ((s.type === 'Received' || s.type === 'Reception') && s.dest) label += ` ${s.dest}`;
       const showHash = (s.type !== 'Received' && s.type !== 'Reception');
-      return txRow(label, showHash ? s.tx : null, s.status, s.error_msg);
-    }).join('')}
-      </div>`;
+      return txRow(label, showHash ? s.tx : null, s.status);
+    }).join('');
+    stepsHtml += dataGroup(walletName, groupContent, 'wallet');
   });
 
   return `
@@ -279,7 +264,7 @@ function getMinerCardHtml(m_id, m) {
         <span class="wdc-name">${m.name}</span>
         <div class="wdc-nft-id">${nftIdPart} ${gameIdPart}</div>
       </div>
-      <span class="wallet-status-badge status-${cardStatus}">${statusLabelText}</span>
+      <span class="wallet-status-badge status-${cardStatus}">${statusLabel(cardStatus)}</span>
     </div>
     ${bubblesHtml}
     <div class="wdc-txs">
@@ -293,7 +278,7 @@ function getGenericCardHtml(cardId, card) {
   const title = card.title || 'Summary';
   const status = card.status || 'success';
   const icon = card.icon || 'info';
-  const badgeLabel = status === 'success' ? '✓ Done' : (status === 'error' ? '✗ Error' : 'Processing');
+  const badgeLabel = statusLabel(status);
 
   let snapshotsHtml = '';
   if (card.snapshots && card.snapshots.length > 0) {

@@ -11,9 +11,6 @@ DATA_DIR = BASE_DIR / "data"
 # Data files
 CACHE_FILE_PATH = DATA_DIR / "miner_types_cache.json"
 
-# Log levels
-DEBUG_MODE: bool = False  # Set to True to display [DEBUG] logs
-
 # ─────────────────────────────────────────────────────────────────
 # BLOCKCHAIN
 # ─────────────────────────────────────────────────────────────────

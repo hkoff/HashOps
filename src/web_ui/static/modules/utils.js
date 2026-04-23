@@ -65,10 +65,6 @@ if (logTerminal) {
   });
 }
 
-function stripAnsi(text) {
-  return text.replace(/\x1b\[[0-9;]*m/g, '');
-}
-
 function appendLog(time, message, level = 'INFO') {
   const entry = document.createElement('div');
   entry.className = `log-entry ${level}`;
@@ -257,13 +253,38 @@ function pill(label, value, cls) {
   return `<div class="wdc-amount-pill ${cls}"><span class="pill-label">${label}</span><span class="pill-value">${value}</span></div>`;
 }
 
+/** Helper to map status to CSS class. */
+function statusClass(s) {
+  return {
+    pending: 'status-running',
+    running: 'status-running',
+    success: 'status-success',
+    'success-cyan': 'status-success-cyan',
+    error: 'status-error',
+    skipped: 'status-skipped',
+    partial: 'status-partial'
+  }[s] || '';
+}
+
 /** Single transaction row with status icon and explorer link. */
 function txRow(label, url, status) {
   const icons = { pending: '<svg-icon name="spin" class="spin-icon-svg svg-size-sm"></svg-icon>', success: '✓', error: '✗' };
-  const clsMap = { pending: 'status-running', success: 'status-success', error: 'status-error' };
   const baseUrl = state.config.explorer_url || 'https://snowtrace.io';
   const shortUrl = url ? url.replace(baseUrl + '/tx/', '').slice(0, 10) + '...' + url.slice(-6) : '';
-  return `<div class="wdc-tx"><span class="wdc-tx-label">${label}</span><span class="wdc-tx-status ${clsMap[status] || ''}">${icons[status] || '·'}</span>${url ? `<a href="${url}" target="_blank" class="wdc-tx-link"><span class="privacy-data">${shortUrl}</span></a>` : ''}</div>`;
+  return `<div class="wdc-tx"><span class="wdc-tx-label">${label}</span><span class="wdc-tx-status ${statusClass(status)}">${icons[status] || '·'}</span>${url ? `<a href="${url}" target="_blank" class="wdc-tx-link"><span class="privacy-data">${shortUrl}</span></a>` : ''}</div>`;
+}
+
+/** Group of data rows with a header (label + icon). */
+function dataGroup(label, content, icon = 'wallet') {
+  return `
+    <div class="wdc-data-group">
+      <div class="wdc-wallet-label flex-inline">
+        <svg-icon name="${icon}" class="svg-size-sm"></svg-icon>
+        ${label}
+      </div>
+      ${content}
+    </div>
+  `;
 }
 
 /** Human-readable status badge content. */

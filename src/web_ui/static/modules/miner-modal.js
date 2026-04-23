@@ -107,14 +107,11 @@ function openMinerModal() {
     leftCol.appendChild(wDiv);
     const listDiv = wDiv.querySelector(`#list-${w.name}`);
 
-    // Placed miners/NFTs
     const placed = info.placed || [];
     if (placed.length) {
       placed.forEach(m => {
         m.gameId = m.id;
-        // Cross-reference with listings
-        const listing = (info.listings || []).find(l => l.assetContract.toLowerCase() === m.nftContract?.toLowerCase() && l.tokenId == m.nftTokenId);
-        listDiv.innerHTML += buildMinerRowHtml(w, { ...m, listing }, getMinerLabel(m.nftContract, m.minerIndex), 'placed');
+        listDiv.innerHTML += buildMinerRowHtml(w, m, getMinerLabel(m.nftContract, m.minerIndex), 'placed');
       });
     }
 
@@ -528,8 +525,8 @@ function renderMinerControlsHtml(wname, m, type, isPanel = false) {
           ${mt?.category === 'external_nft' ? 'Inventory NFT (Non-miner)' : `⛏️ ${m.hashrate || 0} MH/s <div class="refbar-sep"></div> ⚡ ${powerW} W`}
         </div>
         ${m.listing ? `
-        <div class="mm-ap-miners-details mm-listing-info">
-          Listed on marketplace @ ${m.listing.priceDisplay} ${m.listing.currencySymbol}
+        <div class="mm-ap-miners-details ${m.listing.isForeign ? 'mm-listing-info-warning' : 'mm-listing-info'}">
+          ${m.listing.isForeign ? '⚠️ Listed on ' + m.listing.foreignWalletName : 'Listed on marketplace'} @ ${m.listing.priceDisplay} ${m.listing.currencySymbol}
           <div class="refbar-sep"></div> ⏳ ${m.listing.timeRemainingStr}
         </div>
         ` : ''}
@@ -626,8 +623,7 @@ window.selectGridMiner = function (id, wname) {
   slot.classList.add('selected');
 
   // Render controls in the bottom panel
-  const listing = (info.listings || []).find(l => l.assetContract.toLowerCase() === m.nftContract?.toLowerCase() && l.tokenId == m.nftTokenId);
-  panel.innerHTML = renderMinerControlsHtml(wname, { ...m, listing }, 'placed', true);
+  panel.innerHTML = renderMinerControlsHtml(wname, m, 'placed', true);
   panel.classList.remove('hidden');
 };
 

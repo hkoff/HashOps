@@ -1,4 +1,7 @@
-# src/core/blockchain.py — RPC Communications and hCASH contract management
+# src/core/blockchain.py — Orchestrator for Blockchain Data & Contract Management
+#
+# This core module orchestrates the gathering of user data (balances, miners, inventory).
+# It acts as a bridge, retrieving raw blockchain data and enriching it via specialized services (like marketplace_engine) before returning it to the UI in a unified dictionary.
 #
 # ABIs and contract addresses are loaded from the official API at startup via:
 #   init_blockchain_abis(api_client)       → loads main.v1, bigcoin.v1, nfminer.v1
@@ -13,8 +16,9 @@ from web3 import Web3
 from web3.middleware import ExtraDataToPOAMiddleware
 
 from src.config import CHAIN_ID, MULTICALL_ADDRESS, NULL_ADDRESS, RPC_BATCH_SIZE
-from src.utils.helpers import CustomCachingProvider, logger, magenta_bold, red_bold, yellow_bold, cyan_bold, green_bold
-from src.core.wallets import get_rpc_url
+from src.utils.helpers import CustomCachingProvider, logger, magenta_bold, red_bold, yellow_bold, cyan_bold, green_bold, blue_bold
+from src.core.wallets import get_rpc_url, load_wallets
+from src.services.marketplace_engine import sync_user_marketplace_listings
 from src.actions.ui_alerts import push_system_alert, remove_system_alert
 from src.actions.ui_state import get_wallet_name
 
@@ -248,43 +252,6 @@ def get_total_marketplace_listings(w3: Web3, marketplace: Any) -> int:
         logger.error(red_bold(f"[BLOCKCHAIN] Error totalListings: {e}"))
         return 0
 
-def get_all_marketplace_listings_multicall(w3: Web3, mc: Any, marketplace: Any, chunk_size: int = 50) -> List[Dict[str, Any]]:
-    """Retrieves all valid listings from the marketplace using Multicall3 for paging."""
-    total = get_total_marketplace_listings(w3, marketplace)
-    if total == 0: return []
-    
-    all_listings = []
-    calls = []
-    
-    # We poll by pages of chunk_size
-    for start in range(0, total, chunk_size):
-        end = min(start + chunk_size - 1, total - 1)
-        calls.append({
-            "target": marketplace.address,
-            "allowFailure": True,
-            "callData": marketplace.encode_abi("getAllValidListings", [start, end])
-        })
-    
-    try:
-        results = mc.functions.aggregate3(calls).call()
-        for r in results:
-            if r[0] and r[1]:
-                all_listings.extend(_decode_listing(w3, r[1]))
-            elif not r[0]:
-                logger.error(red_bold(f"[BLOCKCHAIN] A chunk of getAllValidListings failed in Multicall"))
-    except Exception as e:
-        err_msg = f"Multicall3 Marketplace Listings failed: {e}"
-        logger.error(red_bold(f"[BLOCKCHAIN] {err_msg}"))
-        push_system_alert(
-            alert_id="marketplace-multicall-failed",
-            title="Marketplace Synchronization Failed",
-            message="Unable to fetch marketplace listings via Multicall. Inventory listing status will be incomplete. Try refreshing the data manually by clicking the \"Wallet\" button",
-            alert_type="error",
-            section="global"
-        )
-            
-    return all_listings
-
 
 # ─────────────────────────────────────────────────────────────────
 # MINERS AND FACILITY MANAGEMENT
@@ -466,17 +433,21 @@ def get_batch_wallets_miners_info(
     game_main: Any,
     game_token: Any,
     miner_types: Dict[str, Any],
-    on_detail: Optional[Any] = None
+    include_marketplace: bool = True
 ) -> Dict[str, Dict[str, Any]]:
     """Retrieves all info for multiple wallets via Multicall3 (in chunks of 50)."""
+    logger.info(cyan_bold(f"[BLOCKCHAIN] Refreshing data for {len(addresses)} wallet(s)..."))
     mc = get_multicall_contract(w3)
     final_data = {}
     
-    # ─────────────────────────────────────────────────────────────
+    total_miners_ingame = 0
+    total_miners_inv = 0
+    total_hcash = 0.0
+
     # Use central RPC_BATCH_SIZE (paquets de 25) for stability
     for i in range(0, len(addresses), RPC_BATCH_SIZE):
         chunk = addresses[i:i + RPC_BATCH_SIZE]
-        logger.debug(magenta_bold(f"[BLOCKCHAIN] Updating chunk #{i//RPC_BATCH_SIZE + 1} ({len(chunk)} wallets)..."))
+        logger.debug(cyan_bold(f"[BLOCKCHAIN] Updating chunk #{i//RPC_BATCH_SIZE + 1} ({len(chunk)} wallets)..."))
         calls = []
         
         for addr in chunk:
@@ -550,6 +521,15 @@ def get_batch_wallets_miners_info(
             }
             chunk_miners_by_addr[addr] = placed
             chunk_owned_by_addr[addr] = owned
+            
+            # Asset counting for summary
+            m_ingame = len(placed)
+            m_inv = sum(len(ids) for ids in owned.values())
+            total_miners_ingame += m_ingame
+            total_miners_inv += m_inv
+            total_hcash += hcash_bal
+            
+            logger.info(blue_bold(f"      · {get_wallet_name(addr)}: {m_ingame} in-game, {m_inv} in inventory | {hcash_bal:.2f} hCASH"))
 
         # 2. Resolution of NFT Token IDs via Multicall (Two-Way Strategy)
         # Group all unknown associations in the chunk to resolve in one pass.
@@ -616,7 +596,7 @@ def get_batch_wallets_miners_info(
                             m_info = next((m for addr in chunk for m in chunk_miners_by_addr[addr] if m["id"] == m_id), None)
                             miner_name = miner_types.get(str(m_info["minerIndex"]), {}).get("nft_name", "Unknown") if m_info else "Unknown"
                             
-                            logger.debug(cyan_bold(f"[BLOCKCHAIN] [{miner_name}] {wallet_name} | Direct Association: Miner ID #{m_id} <-> Token ID #{t_id}"))
+                            logger.debug(blue_bold(f"[BLOCKCHAIN] [{miner_name}] {wallet_name} | Direct Association: Miner ID #{m_id} <-> Token ID #{t_id}"))
                         else:
                             failed_count += 1
                             logger.error(red_bold(f"[BLOCKCHAIN] Resolution failed: Miner ID #{m_id} has no associated Token ID (0)."))
@@ -636,7 +616,7 @@ def get_batch_wallets_miners_info(
                         if m_id > 0:
                             _miner_token_id_cache[m_id] = t_id
                             success_count += 1
-                            logger.debug(cyan_bold(f"[BLOCKCHAIN] [{miner_name}] {wallet_name} | Reverse Association: Miner ID #{m_id} <-> Token ID #{t_id}"))
+                            logger.debug(blue_bold(f"[BLOCKCHAIN] [{miner_name}] {wallet_name} | Reverse Association: Miner ID #{m_id} <-> Token ID #{t_id}"))
                         else:
                             # Miner ID == 0: This NFT has never been placed in-game.
                             pending_count += 1
@@ -668,88 +648,139 @@ def get_batch_wallets_miners_info(
                     miss_count += 1
             
         if hit_count > 0 or miss_count > 0:
-            logger.debug(magenta_bold(f"[BLOCKCHAIN] Association cache summary: {hit_count} hits, {miss_count} misses for the chunk."))
+            logger.debug(cyan_bold(f"[BLOCKCHAIN] Association cache summary: {hit_count} hits, {miss_count} misses for the chunk."))
             
     # ─────────────────────────────────────────────────────────────
     # 3. FINAL CROSS-REFERENCE WITH MARKETPLACE
     # ─────────────────────────────────────────────────────────────
-    marketplace_listings = []
-    marketplace = get_marketplace_contract(w3)
-    if marketplace:
-        msg = "Syncing Marketplace Listings..."
-        logger.info(cyan_bold(f"[BLOCKCHAIN] {msg}"))
-        if on_detail: on_detail(msg)
-        
-        marketplace_listings = get_all_marketplace_listings_multicall(w3, mc, marketplace)
-        
-        if len(marketplace_listings) > 0:
-            res_msg = f"{len(marketplace_listings)} active marketplace listings found."
-            logger.info(green_bold(f"[BLOCKCHAIN] {res_msg}"))
-            if on_detail: on_detail(res_msg)
-        else:
-            res_msg = "No active marketplace listings found."
-            logger.info(yellow_bold(f"[BLOCKCHAIN] {res_msg}"))
-            if on_detail: on_detail(res_msg)
-
-        # Filter and log
-        now = time.time()
-        hcash_addr = (get_hcash_token_address() or "").lower()
-
-        for addr, data in final_data.items():
-            wallet_name = get_wallet_name(addr)
-            owned = data.get("owned", {})
-            for idx_str, tokens in owned.items():
-                miner_name = miner_types.get(idx_str, {}).get("nft_name", "Unknown")
-                nft_addr = m_type.get("nftContract", "").lower() if (m_type := miner_types.get(idx_str)) else ""
-                if not nft_addr or nft_addr == NULL_ADDRESS: continue
-                
-                for t_id in tokens:
-                    for l in marketplace_listings:
-                        if l["assetContract"].lower() == nft_addr and l["tokenId"] == t_id:
-                            # 1. Identify Currency
-                            curr_addr = l.get('currency', "").lower()
-                            is_hcash = (curr_addr == hcash_addr)
-                            sym = "hCASH" if is_hcash else "AVAX"
-                            
-                            # 2. Format Price
-                            price = l.get('pricePerToken', 0) / 1e18
-                            
-                            # 3. Time Management
-                            start_ts = int(l.get('startTimestamp', 0))
-                            end_ts   = int(l.get('endTimestamp', 0))
-                            
-                            remaining_sec = end_ts - now
-                            if remaining_sec > 0:
-                                days = int(remaining_sec // 86400)
-                                hours = int((remaining_sec % 86400) // 3600)
-                                time_str = f"{days}d {hours}h left"
-                            else:
-                                time_str = "Expired"
-
-                            # Attach enriched data
-                            enriched_listing = l.copy()
-                            enriched_listing.update({
-                                "currencySymbol": sym,
-                                "priceDisplay": price,
-                                "timeRemainingStr": time_str,
-                                "startTimeFormatted": time.strftime('%Y-%m-%d %H:%M', time.localtime(start_ts))
-                            })
-                            data["listings"].append(enriched_listing)
-                            
-                            # Log detailed info
-                            logger.debug(cyan_bold(
-                                f"[MARKETPLACE] [{miner_name}] {wallet_name} | Listed: #{t_id} | "
-                                f"Price: {price:.2f} {sym} | "
-                                f"Ends in: {time_str}"
-                            ))
-                            break
+    if include_marketplace:
+        marketplace = get_marketplace_contract(w3)
+        if marketplace:
+            msg = "Syncing Marketplace Listings..."
+            logger.info(cyan_bold(f"[BLOCKCHAIN] {msg}"))
             
-            # Optional: Log a per-wallet summary if listings were found
-            if len(data["listings"]) > 0:
-                msg = f"{wallet_name} has {len(data['listings'])} NFT(s) listed on Marketplace."
-                logger.info(green_bold(f"[BLOCKCHAIN] {msg}"))
+            marketplace_listings = sync_user_marketplace_listings(w3, mc, marketplace)
+            
+            if len(marketplace_listings) > 0:
+                res_msg = f"{len(marketplace_listings)} active marketplace listings found."
+                logger.info(green_bold(f"[BLOCKCHAIN] {res_msg}"))
+            else:
+                res_msg = "No active marketplace listings found."
+                logger.info(yellow_bold(f"[BLOCKCHAIN] {res_msg}"))
 
+            enrich_wallets_with_marketplace(final_data, marketplace_listings, miner_types)
+
+    logger.info(green_bold(
+        f"[BLOCKCHAIN] ✓ Global refresh completed: {total_miners_ingame} miners in-game, "
+        f"{total_miners_inv} in inventory | Total {total_hcash:.2f} hCASH"
+    ))
     return final_data
+
+def enrich_wallets_with_marketplace(
+    final_data: Dict[str, Dict[str, Any]], 
+    marketplace_listings: List[Dict[str, Any]],
+    miner_types: Dict[str, Any]
+) -> None:
+    """
+    Integrates the raw marketplace listing data into the structured wallet dictionary.
+    
+    This function acts as a bridge between the blockchain orchestration layer and the UI.
+    It builds a unified list of all assets possessed by the wallet (owned, placed, external) and checks them against active marketplace listings to detect active and "ghost" listings.
+    """
+    now = time.time()
+    hcash_addr = (get_hcash_token_address() or "").lower()
+
+    # 1. Build a lookup map for marketplace listings for O(1) matching
+    # Key: (contract_address_lower, token_id)
+    listings_map = {}
+    for l in marketplace_listings:
+        key = (l["assetContract"].lower(), l["tokenId"])
+        listings_map[key] = l
+
+    for addr, data in final_data.items():
+        wallet_name = get_wallet_name(addr)
+        all_assets = []
+        
+        # 1. Gather Owned Inventory
+        for idx_str, tokens in data.get("owned", {}).items():
+            m_info = miner_types.get(idx_str, {})
+            c = m_info.get("nftContract", "").lower()
+            name = m_info.get("nft_name", "Unknown")
+            if c and c != NULL_ADDRESS:
+                for t_id in tokens:
+                    all_assets.append({"contract": c, "id": t_id, "name": name, "type": "owned", "ref": None})
+                    
+        # 2. Gather Placed Miners
+        for m in data.get("placed", []):
+            c = m.get("nftContract", "").lower()
+            t_id = m.get("nftTokenId")
+            name = miner_types.get(str(m.get("minerIndex", "")), {}).get("nft_name", "Unknown")
+            if c and c != NULL_ADDRESS and t_id is not None:
+                all_assets.append({"contract": c, "id": t_id, "name": name, "type": "placed", "ref": m})
+                
+        # 3. Gather External NFTs
+        for ext in data.get("ext_nfts", []):
+            c = ext.get("contract", "").lower()
+            t_id = ext.get("id")
+            name = ext.get("name", "Unknown")
+            if c and c != NULL_ADDRESS and t_id is not None:
+                all_assets.append({"contract": c, "id": t_id, "name": name, "type": "ext", "ref": ext})
+
+        # Check all assets against listings using the lookup map
+        for asset in all_assets:
+            l = listings_map.get((asset["contract"], asset["id"]))
+            if l:
+                curr_addr = l.get('currency', "").lower()
+                is_hcash = (curr_addr == hcash_addr)
+                sym = "hCASH" if is_hcash else "AVAX"
+                price = l.get('pricePerToken', 0) / 1e18
+                
+                start_ts = int(l.get('startTimestamp', 0))
+                end_ts   = int(l.get('endTimestamp', 0))
+                remaining_sec = end_ts - now
+                
+                if remaining_sec > 0:
+                    days = int(remaining_sec // 86400)
+                    hours = int((remaining_sec % 86400) // 3600)
+                    time_str = f"{days}d {hours}h left"
+                else:
+                    time_str = "Expired"
+
+                # Determine if it's a ghost/foreign listing
+                # Placed miners are in the GameContract, so their listings are always functionally "ghost"
+                is_foreign = (l["listingCreator"].lower() != addr.lower()) or (asset["type"] == "placed")
+                foreign_wallet = get_wallet_name(l["listingCreator"]) if is_foreign else None
+
+                enriched_listing = l.copy()
+                enriched_listing.update({
+                    "currencySymbol": sym,
+                    "priceDisplay": price,
+                    "timeRemainingStr": time_str,
+                    "startTimeFormatted": time.strftime('%Y-%m-%d %H:%M', time.localtime(start_ts)),
+                    "isForeign": is_foreign,
+                    "foreignWalletName": foreign_wallet
+                })
+                
+                # Attach to the UI list unconditionally so all listings are tracked
+                data["listings"].append(enriched_listing)
+                
+                # Route specific data to the correct UI object
+                if asset["type"] in ("owned", "ext"):
+                    log_prefix = "Ghost Listing (Inventory)" if is_foreign else "Listed"
+                    logger.debug(blue_bold(
+                        f"[MARKETPLACE] [{asset['name']}] {wallet_name} | {log_prefix} | Token ID: {asset['id']} | "
+                        f"Price: {price:.2f} {sym} | Ends in: {time_str}"
+                    ))
+                elif asset["type"] == "placed":
+                    asset["ref"]["listing"] = enriched_listing
+                    logger.debug(blue_bold(
+                        f"[MARKETPLACE] [{asset['name']}] {wallet_name} | Ghost Listing (Placed) | Token ID: {asset['id']} | "
+                        f"Price: {price:.2f} {sym}"
+                    ))
+        
+        if len(data["listings"]) > 0:
+            msg = f"{wallet_name} has {len(data['listings'])} NFT(s) listed on Marketplace."
+            logger.debug(green_bold(f"[BLOCKCHAIN] {msg}"))
 
 def get_multiple_wallets_data(w3: Web3, addresses: List[str], game_main: Any, game_token: Any) -> Dict[str, Dict[str, Any]]:
     """Retrieves pendingRewards and hcashBalance for a list of wallets via Multicall3 (chunked)."""
@@ -768,7 +799,7 @@ def get_multiple_wallets_data(w3: Web3, addresses: List[str], game_main: Any, ga
             # Call 2: balanceOf hCASH
             calls.append({"target": game_token.address, "allowFailure": True, "callData": game_token.encode_abi("balanceOf", [c_addr])})
 
-        logger.debug(magenta_bold(f"[BLOCKCHAIN] Executing Multicall3 chunk ({len(chunk)} wallets)..."))
+        logger.debug(cyan_bold(f"[BLOCKCHAIN] Executing Multicall3 chunk ({len(chunk)} wallets)..."))
         results = mc.functions.aggregate3(calls).call()
         
         for i, addr in enumerate(chunk):

@@ -388,10 +388,18 @@ function renderMinersOverview() {
           const name = mt?.name || `Type #${m.minerIndex}`;
           const img = mt?.image ? `<img src="${mt.image}" class="miner-chip-img" alt="" onerror="this.src=this.src.replace('.png','.gif'); this.onerror=function(){this.style.display='none'};">` : '';
           const gameDetail = m.id ? ` (MINER #${m.id})` : '';
-          bodyHtml += `<div class="miner-chip placed" title="${name} #${m.nftTokenId}${gameDetail} — ${m.hashrate} MH/s ${m.powerConsumption * POWER_UNIT} W">
+          const hasListing = !!m.listing;
+          const warnIcon = hasListing ? '<span>⚠️</span>' : '';
+          const titleSuffix = hasListing ? ` | ⚠️ LISTED ON ${m.listing.foreignWalletName}` : '';
+          
+          const title = `${name} #${m.nftTokenId}${gameDetail} — ${m.hashrate} MH/s ${m.powerConsumption * POWER_UNIT} W${titleSuffix}`;
+          const classes = hasListing ? "miner-chip warning" : "miner-chip placed";
+
+          bodyHtml += `<div class="${classes}" title="${title}">
             ${img}<span class="miner-chip-name">${name}</span>
             <span>#<span class="privacy-data">${m.nftTokenId}</span>${m.id ? ` (MINER #<span class="privacy-data">${m.id}</span>)` : ''}</span>
             <span class="miner-chip-coords">${m.x},${m.y}</span>
+            ${warnIcon}
           </div>`;
         }
         bodyHtml += '</div>';
@@ -411,10 +419,16 @@ function renderMinersOverview() {
           const name = mt?.name || `NFT #${l.tokenId}`;
           const img = mt?.image ? `<img src="${mt.image}" class="miner-chip-img" alt="" onerror="this.src=this.src.replace('.png','.gif'); this.onerror=function(){this.style.display='none'};">` : '';
           
-          bodyHtml += `<div class="miner-chip listed" title="${name} #${l.tokenId} — Listed for ${l.priceDisplay} ${l.currencySymbol}">
+          const titleSuffix = l.isForeign ? ` (Listed on ${l.foreignWalletName})` : '';
+          const title = `${name} #${l.tokenId} — Listed for ${l.priceDisplay} ${l.currencySymbol}${titleSuffix}`;
+          const classes = l.isForeign ? "miner-chip warning" : "miner-chip listed";
+          const warnIcon = l.isForeign ? '<span>⚠️</span>' : '';
+          
+          bodyHtml += `<div class="${classes}" title="${title}">
             ${img}<span class="miner-chip-name">${name}</span>
             <span>#<span class="privacy-data">${l.tokenId}</span></span>
             <span class="miner-chip-time">${l.timeRemainingStr}</span>
+            ${warnIcon}
           </div>`;
         }
         bodyHtml += '</div></div>';
