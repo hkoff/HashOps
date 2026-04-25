@@ -8,7 +8,7 @@ from typing import List, Dict, Any, Optional
 from web3 import Web3
 
 from src.services.logger_setup import logger
-from src.utils.helpers import cyan_bold, red_bold, yellow_bold
+from src.utils.helpers import green_bold, cyan_bold, red_bold, yellow_bold
 from src.actions.ui_alerts import push_system_alert, remove_system_alert
 from src.core.wallets import load_wallets
 from src.services.marketplace_cache import load_marketplace_state, save_marketplace_state
@@ -81,15 +81,25 @@ def sync_user_marketplace_listings(w3: Web3, mc: Any, marketplace: Any, chunk_si
         return list(active_listings_cache.values())
 
     if total == 0:
+        logger.error(red_bold(f"[MARKETPLACE] totalListings returned 0 — nothing to sync."))
         return []
     
+    logger.debug(green_bold(f"[MARKETPLACE] totalListings on-chain: {total} | Cache cursor (last_scanned_id): {last_scanned_id} | Cached active listings: {len(active_listings_cache)}"))
     now = time.time()
     
     # ─────────────────────────────────────────────────────────
     # PHASE A: DISCOVERY (Find new listings)
     # ─────────────────────────────────────────────────────────
+    new_to_scan = total - last_scanned_id
     if total > last_scanned_id:
-        logger.info(cyan_bold(f"[MARKETPLACE] Discovering new listings (from #{last_scanned_id} to #{total - 1}) in chunks of {chunk_size}..."))
+        # Optimization: Since we are making RPC calls anyway, we always fetch full chunks of 500.
+        # We calculate how many full chunks are needed to cover the new listings, and start from there to maximize the safety overlap.
+        num_chunks = (new_to_scan + chunk_size - 1) // chunk_size
+        total_range = num_chunks * chunk_size
+        start = max(0, total - total_range)
+        actual_scan_count = total - start
+        
+        logger.info(cyan_bold(f"[MARKETPLACE] Discovering new listings (from #{start} to #{total - 1}) — {actual_scan_count} listing(s) to scan in {num_chunks} chunk(s) of {chunk_size}..."))
         
         # Pre-load all our wallets to only track our own listings
         all_wallets = load_wallets()
@@ -97,7 +107,6 @@ def sync_user_marketplace_listings(w3: Web3, mc: Any, marketplace: Any, chunk_si
 
         consecutive_failures = 0
         current_chunk = chunk_size
-        start = last_scanned_id
         
         while start < total:
             end = min(start + current_chunk - 1, total - 1)
@@ -137,8 +146,12 @@ def sync_user_marketplace_listings(w3: Web3, mc: Any, marketplace: Any, chunk_si
         if consecutive_failures < 5:
             remove_system_alert("marketplace-discovery-failed")
             
-        # Update cursor to wherever we successfully reached
-        last_scanned_id = start
+        # Update cursor — cap at `total` to prevent overshoot from chunk arithmetic (start += chunk_size can exceed total when the remaining range < chunk_size)
+        last_scanned_id = min(start, total)
+        
+        logger.debug(green_bold(f"[MARKETPLACE] Phase A complete — cursor advanced to {last_scanned_id} | Active listings in cache after discovery: {len(active_listings_cache)}"))
+    else:
+        logger.debug(cyan_bold(f"[MARKETPLACE] Phase A skipped — cursor ({last_scanned_id}) is already at totalListings ({total}), no new listings to discover."))
 
     # ─────────────────────────────────────────────────────────
     # PHASE B: VERIFICATION (Refresh our known listings)
@@ -178,9 +191,10 @@ def sync_user_marketplace_listings(w3: Web3, mc: Any, marketplace: Any, chunk_si
                 logger.warning(yellow_bold(f"[MARKETPLACE] Verification Multicall batch failed: {e}"))
                 # On failure, we KEEP the old data in active_listings_cache to avoid losing our listings on a network glitch!
 
-    # ─────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
     # PHASE C: PERSISTENCE
-    # ─────────────────────────────────────────────────────────
+    # ─────────────────────────────────────────────────────────────
+    logger.debug(green_bold(f"[MARKETPLACE] Phase C — Persisting state: cursor={last_scanned_id}, {len(active_listings_cache)} active listing(s)"))
     save_marketplace_state(last_scanned_id, active_listings_cache)
     
     return list(active_listings_cache.values())

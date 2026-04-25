@@ -104,7 +104,7 @@ But the announcement of the Hashathon made me want to share, refine what I’d b
 | ⛏️ **Manage Miners (Batch)** | Withdraw, Transfer & Place miner NFTs in mass across wallets with a single modal — complete Withdraw → Transfer → Place pipelines |
 | ⛽ **Dispatch Gas Fees** | Smart AVAX distribution algorithm that auto-balances gas across all wallets using a debt-matching system |
 | 📊 **Live Dashboard** | Real-time tracking of assets across 3 logical states: **In-Game** (active miners), **Inventory** (ready to place), and **Marketplace** (actively listed). Includes grid/list views & SSE terminal |
-| 🛒 **Smart Marketplace Engine** | Incremental, stateful synchronization of NFT listings. Features an offline-resilient cache and cross-wallet "ghost listing" detection. |
+| 🛒 **Smart Marketplace Engine** | Incremental, stateful synchronization of NFT listings. Features an offline-resilient cache, cross-wallet "ghost listing" detection, and safety rescan logic to handle multi-listing anomalies |
 | 🔒 **Privacy Mode** | One-click toggle to hide all sensitive data (balances, addresses) from the UI |
 | 🔄 **Multicall3 Optimization** | All blockchain reads are batched via Multicall3 — fetching balances, rewards, facility data & miners for 50 wallets in a single RPC call |
 | 🧠 **Dynamic ABI Resolution** | Contract addresses & ABIs are fetched from the official HashCash API at startup — no hardcoded addresses, fully future-proof |

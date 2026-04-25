@@ -529,6 +529,10 @@ function renderMinerControlsHtml(wname, m, type, isPanel = false) {
           ${m.listing.isForeign ? '⚠️ Listed on ' + m.listing.foreignWalletName : 'Listed on marketplace'} @ ${m.listing.priceDisplay} ${m.listing.currencySymbol}
           <div class="refbar-sep"></div> ⏳ ${m.listing.timeRemainingStr}
         </div>
+        ${m.listing.duplicateCount > 1 ? `
+        <div class="mm-ap-miners-details mm-listing-info-warning" style="margin-top: 4px;">
+          ⚠️ This NFT is listed ${m.listing.duplicateCount} times on the Marketplace!
+        </div>` : ''}
         ` : ''}
       </div>
     </div>

@@ -671,7 +671,7 @@ def get_batch_wallets_miners_info(
             enrich_wallets_with_marketplace(final_data, marketplace_listings, miner_types)
 
     logger.info(green_bold(
-        f"[BLOCKCHAIN] ✓ Global refresh completed: {total_miners_ingame} miners in-game, "
+        f"[BLOCKCHAIN] Global refresh completed: {total_miners_ingame} miners in-game, "
         f"{total_miners_inv} in inventory | Total {total_hcash:.2f} hCASH"
     ))
     return final_data
@@ -691,11 +691,17 @@ def enrich_wallets_with_marketplace(
     hcash_addr = (get_hcash_token_address() or "").lower()
 
     # 1. Build a lookup map for marketplace listings for O(1) matching
-    # Key: (contract_address_lower, token_id)
+    # Key: (contract_address_lower, token_id) -> List[listing_dicts]
+    # We use a list because the same NFT can be listed multiple times
     listings_map = {}
     for l in marketplace_listings:
         key = (l["assetContract"].lower(), l["tokenId"])
-        listings_map[key] = l
+        if key not in listings_map:
+            listings_map[key] = []
+        listings_map[key].append(l)
+    
+    logger.debug(cyan_bold(f"[MARKETPLACE] enrich_wallets_with_marketplace: {len(marketplace_listings)} listing(s) to match against {len(final_data)} wallet(s)"))
+    matched_listing_ids = set()
 
     for addr, data in final_data.items():
         wallet_name = get_wallet_name(addr)
@@ -728,8 +734,15 @@ def enrich_wallets_with_marketplace(
 
         # Check all assets against listings using the lookup map
         for asset in all_assets:
-            l = listings_map.get((asset["contract"], asset["id"]))
-            if l:
+            listings_for_asset = listings_map.get((asset["contract"], asset["id"]), [])
+            
+            if len(listings_for_asset) > 1:
+                logger.warning(yellow_bold(
+                    f"[MARKETPLACE] ⚠ MULTIPLE LISTINGS detected for {asset['name']} (Token #{asset['id']})! "
+                    f"Found {len(listings_for_asset)} active listings on Marketplace."
+                ))
+
+            for l in listings_for_asset:
                 curr_addr = l.get('currency', "").lower()
                 is_hcash = (curr_addr == hcash_addr)
                 sym = "hCASH" if is_hcash else "AVAX"
@@ -758,11 +771,13 @@ def enrich_wallets_with_marketplace(
                     "timeRemainingStr": time_str,
                     "startTimeFormatted": time.strftime('%Y-%m-%d %H:%M', time.localtime(start_ts)),
                     "isForeign": is_foreign,
-                    "foreignWalletName": foreign_wallet
+                    "foreignWalletName": foreign_wallet,
+                    "duplicateCount": len(listings_for_asset)
                 })
                 
                 # Attach to the UI list unconditionally so all listings are tracked
                 data["listings"].append(enriched_listing)
+                matched_listing_ids.add(l["listingId"])
                 
                 # Route specific data to the correct UI object
                 if asset["type"] in ("owned", "ext"):
@@ -781,6 +796,17 @@ def enrich_wallets_with_marketplace(
         if len(data["listings"]) > 0:
             msg = f"{wallet_name} has {len(data['listings'])} NFT(s) listed on Marketplace."
             logger.debug(green_bold(f"[BLOCKCHAIN] {msg}"))
+    
+    # Log unmatched listings — these are Ghost Listings
+    unmatched = [l for l in marketplace_listings if l["listingId"] not in matched_listing_ids]
+    if unmatched:
+        for um in unmatched:
+            creator_name = get_wallet_name(um["listingCreator"])
+            logger.error(red_bold(
+                f"[MARKETPLACE] ❌ GHOST LISTING ERROR: Listing #{um['listingId']} (Token #{um['tokenId']}) "
+                f"was created by {creator_name} but the NFT was NOT found in any wallet inventory! "
+                f"This can happen if the inventory API is lagging or if the NFT is in a wallet not managed by the bot."
+            ))
 
 def get_multiple_wallets_data(w3: Web3, addresses: List[str], game_main: Any, game_token: Any) -> Dict[str, Dict[str, Any]]:
     """Retrieves pendingRewards and hcashBalance for a list of wallets via Multicall3 (chunked)."""

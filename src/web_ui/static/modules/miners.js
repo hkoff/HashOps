@@ -419,16 +419,21 @@ function renderMinersOverview() {
           const name = mt?.name || `NFT #${l.tokenId}`;
           const img = mt?.image ? `<img src="${mt.image}" class="miner-chip-img" alt="" onerror="this.src=this.src.replace('.png','.gif'); this.onerror=function(){this.style.display='none'};">` : '';
           
+          const isDupe = l.duplicateCount > 1;
+          const dupeText = isDupe ? ` | ⚠️ LISTED ${l.duplicateCount} TIMES` : '';
           const titleSuffix = l.isForeign ? ` (Listed on ${l.foreignWalletName})` : '';
-          const title = `${name} #${l.tokenId} — Listed for ${l.priceDisplay} ${l.currencySymbol}${titleSuffix}`;
-          const classes = l.isForeign ? "miner-chip warning" : "miner-chip listed";
-          const warnIcon = l.isForeign ? '<span>⚠️</span>' : '';
+          const title = `${name} #${l.tokenId} — Listed for ${l.priceDisplay} ${l.currencySymbol}${titleSuffix}${dupeText}`;
+          const classes = (l.isForeign || isDupe) ? "miner-chip warning" : "miner-chip listed";
           
+          let icons = '';
+          if (l.isForeign) icons += '<span title="Foreign Listing">⚠️</span> ';
+          if (isDupe) icons += `<span class="badge-dupe" title="Double Listing">⚠ DUP x${l.duplicateCount}</span>`;
+
           bodyHtml += `<div class="${classes}" title="${title}">
             ${img}<span class="miner-chip-name">${name}</span>
             <span>#<span class="privacy-data">${l.tokenId}</span></span>
             <span class="miner-chip-time">${l.timeRemainingStr}</span>
-            ${warnIcon}
+            ${icons}
           </div>`;
         }
         bodyHtml += '</div></div>';
