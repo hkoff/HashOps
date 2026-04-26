@@ -8,7 +8,7 @@ from src.config import CHAIN_ID, BLOCK_EXPLORER_URL
 from src.services.logger_setup import logger
 from src.utils.helpers import red_bold, yellow_bold, green_bold
 
-from src.actions.ui_state import _upd, _log_miner_action
+from src.actions.ui_state import _upd, _log_miner_action, log_wallet_error
 from src.actions.utils import format_web3_error
 from src.core.security import validate_authorized_wallet, validate_contract, SecurityException
 
@@ -59,12 +59,14 @@ def run_withdraw_batch_for_wallet(
         except SecurityException as e:
             logger.critical(red_bold(f"[{name}] SECURITY VIOLATION: {e}"))
             err_msg = str(e)
-            _upd(name, withdraw_status="error", status="error", error=err_msg)
+            _upd(name, withdraw_status="error")
+            log_wallet_error(name, err_msg, address=address)
             return tx_hashes, current_nonce, err_msg
             
         except Exception as e:
             err_msg = format_web3_error("Withdraw failed", e)
-            _upd(name, withdraw_status="error", status="error", error=err_msg)
+            _upd(name, withdraw_status="error")
+            log_wallet_error(name, err_msg, address=address)
             logger.error(red_bold(f"[{name}] (nonce:{current_nonce}) Withdraw Miner {m_id} submission failed: {e}"))
             return tx_hashes, current_nonce, err_msg
 

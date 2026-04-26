@@ -9,7 +9,7 @@ from src.services.logger_setup import logger
 from src.utils.helpers import red_bold, yellow_bold, green_bold
 from src.core.blockchain import get_nft_contract, get_miner_contract_address
 
-from src.actions.ui_state import _upd, _log_miner_action, get_wallet_name
+from src.actions.ui_state import _upd, _log_miner_action, get_wallet_name, log_wallet_error
 from src.actions.utils import format_web3_error
 from src.core.security import validate_authorized_wallet, validate_contract, SecurityException
 
@@ -40,7 +40,8 @@ def run_transfer_batch_for_wallet(
             
             if nft_id is None:
                 logger.error(red_bold(f"[{name}] CRITICAL Error: Missing NFT ID for {t_name} (Miner #{m_id}). Aborting."))
-                _upd(name, transfer_status="error", status="error")
+                _upd(name, transfer_status="error")
+                log_wallet_error(name, f"CRITICAL Error: Missing NFT ID for {t_name}", address=address)
                 break
 
             # --- NFT contract resolution (Source of truth: hCASH contract) ---
@@ -98,12 +99,14 @@ def run_transfer_batch_for_wallet(
 
         except SecurityException as e:
             logger.critical(red_bold(f"[{name}] SECURITY VIOLATION: {e}"))
-            _upd(name, transfer_status="error", status="error", error=str(e))
+            _upd(name, transfer_status="error")
+            log_wallet_error(name, str(e), address=address)
             return tx_hashes, current_nonce, str(e)
             
         except Exception as e:
             err_msg = format_web3_error("Transfer failed", e)
-            _upd(name, transfer_status="error", status="error", error=err_msg)
+            _upd(name, transfer_status="error")
+            log_wallet_error(name, err_msg, address=address)
             logger.error(red_bold(f"[{name}] (nonce:{current_nonce}) Transfer Miner {m_id} submission failed: {e}"))
             return tx_hashes, current_nonce, err_msg
 

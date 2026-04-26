@@ -8,7 +8,7 @@ from src.config import CHAIN_ID, BLOCK_EXPLORER_URL
 from src.services.logger_setup import logger
 from src.utils.helpers import red_bold, yellow_bold, format_decimal, green_bold
 
-from src.actions.ui_state import _upd, _set_avax_tx
+from src.actions.ui_state import _upd, _set_avax_tx, log_wallet_error
 from src.actions.utils import format_web3_error
 from src.core.security import ANCHOR_AVAX_TOKEN, validate_authorized_wallet, validate_asset, SecurityException
 from src.config import AVAX_TOKEN_ADDRESS
@@ -68,7 +68,7 @@ def run_transfer_avax(
     except SecurityException as e:
         logger.critical(red_bold(f"[GAS] {name} SECURITY VIOLATION: {e}"))
         err_msg = str(e)
-        _upd(name, error=err_msg, status="error")
+        log_wallet_error(name, err_msg, address=address)
         if 'tx_id' in locals():
             _set_avax_tx(name, tx_id, {"type": "out", "amount": amount_avax, "target": dest_name, "status": "error", "tx": None})
             _set_avax_tx(dest_name, tx_id, {"type": "in", "amount": amount_avax, "target": name, "status": "error", "tx": None})
@@ -77,7 +77,7 @@ def run_transfer_avax(
     except Exception as e:
         err_msg = format_web3_error("AVAX Transfer failed", e)
         logger.error(red_bold(f"[GAS] {name} (nonce:{nonce}) AVAX Transfer Failed: {e}"))
-        _upd(name, error=err_msg, status="error")
+        log_wallet_error(name, err_msg, address=address)
         if 'tx_id' in locals():
             _set_avax_tx(name, tx_id, {"type": "out", "amount": amount_avax, "target": dest_name, "status": "error", "tx": None})
             _set_avax_tx(dest_name, tx_id, {"type": "in", "amount": amount_avax, "target": name, "status": "error", "tx": None})

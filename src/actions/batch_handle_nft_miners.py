@@ -13,7 +13,7 @@ from src.core.blockchain import get_web3, get_game_main_contract, get_game_token
 from src.core.gas import get_eip1559_gas_params
 
 from src.actions.utils import get_batch_nonces
-from src.actions.ui_state import _init_detail, _init_generic_card, _log_miner_action, _prepare_miner_journey, _upd, get_wallet_details
+from src.actions.ui_state import _init_detail, _init_generic_card, _log_miner_action, _prepare_miner_journey, _upd, log_wallet_error
 from src.actions.bricks.withdraw_miner import run_withdraw_batch_for_wallet
 from src.actions.bricks.transfer_miner import run_transfer_batch_for_wallet
 from src.actions.bricks.place_miner import run_place_batch_for_wallet, get_facility_and_placed_coords, get_empty_coordinates
@@ -72,7 +72,8 @@ class BatchMinersPhaser:
             logger.error(red_bold(f"[{w_name}] ❌ Withdraw failed for Miner #{m_id}: {log_err_msg}"))
             _log_miner_action(w_name, m_id, "Withdraw", status="error", error_msg=error_msg)
             self.engine.global_failed_items.add(m_id)
-            _upd(w_name, status="error", error=error_msg)
+            addr = next((wal["address"] for wal in self.wallets if wal["name"] == w_name), None)
+            log_wallet_error(w_name, error_msg, address=addr)
 
     def on_transfer_success(self, w_name, tx_hex, val, receipt):
         m_id = val[0] if isinstance(val, tuple) else val
@@ -96,7 +97,8 @@ class BatchMinersPhaser:
                 # dest is already the resolved name from metadata
                 _log_miner_action(dest, m_id, "Received", status="error", error_msg="Transfer failed")
             self.engine.global_failed_items.add(m_id)
-            _upd(w_name, status="error", error=error_msg)
+            addr = next((wal["address"] for wal in self.wallets if wal["name"] == w_name), None)
+            log_wallet_error(w_name, error_msg, address=addr)
 
     def on_place_success(self, w_name, tx_hex, val, receipt):
         m_id = val[0] if isinstance(val, tuple) else val
@@ -115,7 +117,8 @@ class BatchMinersPhaser:
             logger.error(red_bold(f"[{w_name}] ❌ Place failed for Miner #{m_id}: {log_err_msg}"))
             _log_miner_action(w_name, m_id, "Place", status="error", error_msg=error_msg)
             self.engine.global_failed_items.add(m_id)
-            _upd(w_name, status="error", error=error_msg)
+            addr = next((wal["address"] for wal in self.wallets if wal["name"] == w_name), None)
+            log_wallet_error(w_name, error_msg, address=addr)
 
     # --- Prepare/Submit Withdraw ---
     def withdraw_prepare(self, items):
@@ -154,10 +157,9 @@ class BatchMinersPhaser:
                 self.engine.global_failed_items.add(item["id"])
                 _log_miner_action(w_name, item["id"], "Withdraw", status="error", error_msg=err_msg)
         
-        # Force Wallet Card creation on critical submission error
+        # Log aggregated wallet error
         addr = next((wal["address"] for wal in self.wallets if wal["name"] == w_name), None)
-        if addr: _init_detail(w_name, addr, status="error", error=err_msg)
-        else: _upd(w_name, status="error", error=err_msg)
+        log_wallet_error(w_name, err_msg, address=addr)
 
     # --- Prepare/Submit Transfer ---
     def transfer_prepare(self, items):
@@ -241,10 +243,9 @@ class BatchMinersPhaser:
                 self.engine.global_failed_items.add(item["id"])
                 _log_miner_action(w_name, item["id"], "Transfer", status="error", error_msg=err_msg)
         
-        # Force Wallet Card creation on critical submission error
+        # Log aggregated wallet error
         addr = next((wal["address"] for wal in self.wallets if wal["name"] == w_name), None)
-        if addr: _init_detail(w_name, addr, status="error", error=err_msg)
-        else: _upd(w_name, status="error", error=err_msg)
+        log_wallet_error(w_name, err_msg, address=addr)
 
     # --- Prepare/Submit Place ---
     def filter_places(self, places_list):
@@ -318,10 +319,9 @@ class BatchMinersPhaser:
                 self.engine.global_failed_items.add(item["id"])
                 _log_miner_action(w_name, item["id"], "Place", status="error", error_msg=err_msg)
         
-        # Force Wallet Card creation on critical submission error
+        # Log aggregated wallet error
         addr = next((wal["address"] for wal in self.wallets if wal["name"] == w_name), None)
-        if addr: _init_detail(w_name, addr, status="error", error=err_msg)
-        else: _upd(w_name, status="error", error=err_msg)
+        log_wallet_error(w_name, err_msg, address=addr)
 
 
 def run_all_miners_batches(target_wallets: List[Dict[str, Any]], data: Dict[str, Any]) -> Dict[str, Any]:

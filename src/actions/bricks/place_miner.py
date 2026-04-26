@@ -10,7 +10,7 @@ from src.services.logger_setup import logger
 from src.utils.helpers import red_bold, yellow_bold, cyan_bold, green_bold
 from src.core.blockchain import get_nft_contract, get_miner_contract_address
 
-from src.actions.ui_state import _upd, _log_miner_action
+from src.actions.ui_state import _upd, _log_miner_action, log_wallet_error
 from src.actions.utils import format_web3_error
 from src.core.security import validate_authorized_wallet, validate_contract, SecurityException
 
@@ -70,7 +70,8 @@ def run_place_batch_for_wallet(
         logger.debug(cyan_bold(f"[{name}] Facility: Capacity={max_m} | Native Grid={max_x}x{max_y}"))
     except Exception as e:
         logger.error(red_bold(f"[{name}] Unable to read Facility/Placed Miners: {e}"))
-        _upd(name, place_status="error", status="error")
+        _upd(name, place_status="error")
+        log_wallet_error(name, f"Unable to read Facility/Placed Miners: {e}", address=address)
         return {}
         
     if base_nonce is None:
@@ -89,7 +90,8 @@ def run_place_batch_for_wallet(
             
             if nft_id is None:
                 logger.error(red_bold(f"[{name}] CRITICAL Error: Missing NFT ID for {p_name} (Miner #{m_id}). Aborting."))
-                _upd(name, place_status="error", status="error")
+                _upd(name, place_status="error")
+                log_wallet_error(name, f"CRITICAL Error: Missing NFT ID for {p_name}", address=address)
                 break
 
             # --- NFT contract resolution (Source of truth: hCASH contract) ---
@@ -155,12 +157,14 @@ def run_place_batch_for_wallet(
         except SecurityException as e:
             logger.critical(red_bold(f"[{name}] SECURITY VIOLATION: {e}"))
             err_msg = str(e)
-            _upd(name, place_status="error", status="error", error=err_msg)
+            _upd(name, place_status="error")
+            log_wallet_error(name, err_msg, address=address)
             return tx_hashes, base_nonce, err_msg
             
         except Exception as e:
             err_msg = format_web3_error("Place failed", e)
-            _upd(name, place_status="error", status="error", error=err_msg)
+            _upd(name, place_status="error")
+            log_wallet_error(name, err_msg, address=address)
             logger.error(red_bold(f"[{name}] (nonce:{base_nonce}) Placement error for {p_name} #{m_id}: {e}"))
             return tx_hashes, base_nonce, err_msg
 

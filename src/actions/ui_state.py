@@ -96,12 +96,47 @@ def _set_avax_tx(name: str, tx_id: str, tx_info: Dict[str, Any]) -> None:
 
 def _upd(name: str, **kwargs) -> None:
     """Updates wallet details in a thread-safe manner."""
+    if "error" in kwargs:
+        from src.services.logger_setup import logger
+        logger.warning(f"⚠️ [_upd] Usage of 'error' kwarg detected for {name}. Please use log_wallet_error() instead for proper deduplication!")
+    
     # If status is present, use _set_status to ensure Sidebar sync
     if "status" in kwargs:
         _set_status(name, kwargs.pop("status"))
     with _details_lock:
         if name in _wallet_details:
             _wallet_details[name].update(kwargs)
+
+def log_wallet_error(name: str, error_msg: str, address: Optional[str] = None) -> None:
+    """Logs an error on the wallet card, creating it if necessary and deduplicating messages."""
+    with _details_lock:
+        # 1. If the card doesn't exist, we create it dynamically (Lazy loading)
+        if name not in _wallet_details and address:
+            _address_to_name[address.lower()] = name
+            _wallet_details[name] = {
+                "name": name, "address": address, "status": "error",
+                "initial_balance": None, "initial_pending": None, "target_balance": None,
+                "balance": None, "pending": None, "total": None,
+                "claim_tx": None, "claim_status": None,
+                "actual_claimed": None,
+                "transfer_amount": None, "transfer_tx": None, "transfer_status": None,
+                "error": error_msg, "batch_summary": None, "recap_html": None,
+                "transfer_avax_txs": {},
+            }
+            
+        # 2. If the card exists, handle deduplication
+        elif name in _wallet_details:
+            current_error = _wallet_details[name].get("error")
+            if current_error:
+                # Concatenate only if the error message is new
+                if error_msg not in current_error:
+                    _wallet_details[name]["error"] = f"{current_error}<br/>{error_msg}"
+            else:
+                _wallet_details[name]["error"] = error_msg
+            _wallet_details[name]["status"] = "error"
+            
+    # Sync status with sidebar
+    _set_status(name, "error")
 
 def _prepare_miner_journey(m_id: int, nft_id: Optional[int], name: str, image: Optional[str], planned_steps: list, game_id: Optional[int] = None) -> None:
     """Initializes a miner's tracking at the start of an orchestrator. Idempotent."""

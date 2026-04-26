@@ -15,7 +15,7 @@
   <img src="https://img.shields.io/badge/Flask-3.1.3-black?logo=flask" alt="Flask" />
   <img src="https://img.shields.io/badge/Web3.py-7.15.3-F7DF1E?logo=ethereum&logoColor=black" alt="Web3" />
   <img src="https://img.shields.io/badge/Avalanche-C--Chain-E84142?logo=data:image/svg+xml;base64,..." alt="Avalanche" />
-  <img src="https://img.shields.io/badge/status-working%20prototype-brightgreen" alt="Status" />
+  <img src="https://img.shields.io/badge/status-working-brightgreen" alt="Status" />
 </p>
 
 <p align="center">

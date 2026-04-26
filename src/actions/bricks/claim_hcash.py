@@ -8,7 +8,7 @@ from src.config import CHAIN_ID, BLOCK_EXPLORER_URL
 from src.services.logger_setup import logger
 from src.utils.helpers import green_bold, red_bold, format_decimal
 
-from src.actions.ui_state import _upd, get_wallet_name
+from src.actions.ui_state import _upd, get_wallet_name, log_wallet_error
 from src.actions.utils import format_web3_error
 from src.utils.helpers import yellow_bold
 from src.core.security import validate_authorized_wallet, validate_contract, SecurityException
@@ -94,11 +94,13 @@ def run_claim_single_wallet(
     except SecurityException as e:
         logger.critical(red_bold(f"[{name}] SECURITY VIOLATION: {e}"))
         err_msg = str(e)
-        _upd(name, claim_status="error", status="error", error=err_msg)
+        _upd(name, claim_status="error")
+        log_wallet_error(name, err_msg, address=address)
         return {"wallet": name, "claimed": 0.0, "success": False, "error": err_msg, "new_balance": initial_balance, "next_nonce": nonce, "error_msg": err_msg}
 
     except Exception as e:
         err_msg = format_web3_error("Claim failed", e)
-        _upd(name, claim_status="error", status="error", error=err_msg)
+        _upd(name, claim_status="error")
+        log_wallet_error(name, err_msg, address=address)
         logger.error(red_bold(f"[{name}] (nonce:{nonce}) Claim failed: {e}"))
         return {"wallet": name, "claimed": 0.0, "success": False, "error": err_msg, "new_balance": initial_balance, "next_nonce": nonce, "error_msg": err_msg}

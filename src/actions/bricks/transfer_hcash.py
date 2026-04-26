@@ -8,7 +8,7 @@ from src.config import CHAIN_ID, BLOCK_EXPLORER_URL
 from src.services.logger_setup import logger
 from src.utils.helpers import green_bold, red_bold, yellow_bold, format_decimal
 
-from src.actions.ui_state import _upd
+from src.actions.ui_state import _upd, log_wallet_error
 from src.actions.utils import format_web3_error
 from src.core.security import ANCHOR_GAME_TOKEN, validate_authorized_wallet, validate_contract, validate_asset, SecurityException
 
@@ -73,12 +73,14 @@ def run_transfer_single_wallet(
     except SecurityException as e:
         logger.critical(red_bold(f"[{name}] SECURITY VIOLATION: {e}"))
         err_msg = str(e)
-        _upd(name, transfer_status="error", error=err_msg, status="error")
+        _upd(name, transfer_status="error")
+        log_wallet_error(name, err_msg, address=address)
         return {"wallet": name, "transferred": 0.0, "success": False, "next_nonce": nonce, "error_msg": err_msg}
 
     except Exception as e:
         logger.error(red_bold(f"[{name}] (nonce:{nonce}) Phase 2 failure (Transfer): {e}"))
         err_msg = format_web3_error("Transfer failed", e)
-        _upd(name, transfer_status="error", error=err_msg, status="error")
+        _upd(name, transfer_status="error")
+        log_wallet_error(name, err_msg, address=address)
         return {"wallet": name, "transferred": 0.0, "success": False, "next_nonce": nonce, "error_msg": err_msg}
 

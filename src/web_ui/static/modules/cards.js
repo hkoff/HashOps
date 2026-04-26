@@ -147,8 +147,8 @@ function getWalletCardHtml(name, d, cardStatus) {
   let txRows = '';
   let claimGroup = '';
   if (d.claim_tx) claimGroup += txRow(state.actionNames[state.actionKeys.CLAIM], d.claim_tx, d.claim_status);
-  if (d.transfer_tx) claimGroup += txRow('Transfer hCASH', d.transfer_tx, d.transfer_status);
-  if (claimGroup) txRows += dataGroup('hCASH Action', claimGroup, 'gift');
+  if (d.transfer_tx) claimGroup += txRow('Tokens Transfer', d.transfer_tx, d.transfer_status);
+  if (claimGroup) txRows += dataGroup('hCASH Action', claimGroup, 'wallet');
   
   txRows += avaxTxsHtml;
   

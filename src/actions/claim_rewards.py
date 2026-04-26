@@ -6,11 +6,11 @@ from typing import List, Dict, Any
 from src.config import CLAIM_THRESHOLD, GAS_ESTIMATE_BUFFER, DEFAULT_GAS_CLAIM, DEFAULT_GAS_TRANSFER, ACTION_NAMES, ACTION_KEY_CLAIM
 from src.services.logger_setup import logger
 from src.utils.helpers import cyan_bold, format_decimal, yellow_bold, magenta_bold, red_bold, green_bold
-from src.core.blockchain import get_web3, get_game_token_contract, get_game_main_contract, get_multiple_wallets_data
+from src.core.blockchain import get_web3, get_game_token_contract, get_game_main_contract, get_wallets_basic_data
 from src.core.gas import get_eip1559_gas_params
 
 from src.actions.utils import get_batch_nonces
-from src.actions.ui_state import _init_detail, _upd
+from src.actions.ui_state import _init_detail, _upd, log_wallet_error
 from src.actions.bricks.claim_hcash import run_claim_single_wallet, process_claim_receipt
 from src.actions.bricks.transfer_hcash import run_transfer_single_wallet
 from src.actions.phase_engine import PhaseEngine, Phase, SubmissionResult
@@ -65,7 +65,8 @@ class BatchClaimPhaser:
     def claim_submit_error(self, item, error_msg=None):
         w_name = item[0]["name"]
         err_msg = error_msg or "Claim submission failed."
-        _upd(w_name, claim_status="error", status="error", error=err_msg)
+        _upd(w_name, claim_status="error")
+        log_wallet_error(w_name, err_msg, address=item[0]["address"])
         self.engine.global_failed_items.add(w_name)
 
     def on_claim_success(self, w_name, tx_hex, val, receipt):
@@ -105,7 +106,9 @@ class BatchClaimPhaser:
     def on_claim_error(self, w_name, tx_hex, val, receipt, error_msg="Unknown failure"):
         if not error_msg: error_msg = "Unknown failure"
         log_err_msg = error_msg.replace("<br/>", " - ")
-        _upd(w_name, claim_status="error", status="error", error=error_msg)
+        addr = next((x[0]["address"] for x in self.eligible if x[0]["name"] == w_name), None)
+        _upd(w_name, claim_status="error")
+        log_wallet_error(w_name, error_msg, address=addr)
         logger.error(red_bold(f"[{w_name}] Phase 1 failed: {log_err_msg}"))
         self.engine.global_failed_items.add(w_name)
 
@@ -146,7 +149,8 @@ class BatchClaimPhaser:
     def transfer_submit_error(self, item, error_msg=None):
         w_name = item[0]["name"]
         err_msg = error_msg or "Transfer submission failed."
-        _upd(w_name, transfer_status="error", status="error", error=err_msg)
+        _upd(w_name, transfer_status="error")
+        log_wallet_error(w_name, err_msg, address=item[0]["address"])
         self.engine.global_failed_items.add(w_name)
 
     def on_transfer_success(self, w_name, tx_hex, val, receipt):
@@ -157,7 +161,9 @@ class BatchClaimPhaser:
         if not error_msg: error_msg = "Unknown failure"
         log_err_msg = error_msg.replace("<br/>", " - ")
         logger.error(red_bold(f"[{w_name}] Phase 2 Transfer failed: {log_err_msg}"))
-        _upd(w_name, transfer_status="error", status="error", error=error_msg)
+        addr = next((x[0]["address"] for x in self.eligible if x[0]["name"] == w_name), None)
+        _upd(w_name, transfer_status="error")
+        log_wallet_error(w_name, error_msg, address=addr)
         self.engine.global_failed_items.add(w_name)
 
 def run_claim_all(target_wallets: List[Dict[str, Any]], burner1_address: str) -> Dict[str, Any]:
@@ -190,19 +196,26 @@ def run_claim_all(target_wallets: List[Dict[str, Any]], burner1_address: str) ->
     logger.debug(magenta_bold("--- PHASE 0: BATCH VERIFICATION (MULTICALL3) ---"))  
 
     addresses = [w["address"] for w in target_wallets]
-    batch_data = get_multiple_wallets_data(w3, addresses, game_main, game_token)
+    batch_data = get_wallets_basic_data(w3, addresses, game_main, game_token)
     
     eligible = []
     for w in target_wallets:
         addr_lower = w["address"].lower()
-        info = batch_data.get(addr_lower, {"pending": 0.0, "balance": 0.0, "balance_wei": 0})
-        total_p = info["pending"] + info["balance"]
+        info = batch_data.get(addr_lower, {"pending": 0.0, "hcash_balance": 0.0, "hcash_balance_wei": 0, "rpc_error": True})
+        
+        if info.get("rpc_error"):
+            logger.error(red_bold(f"[{w['name']}] Skipping Claim Action due to RPC error during Phase 0."))
+            _upd(w["name"], status="error")
+            log_wallet_error(w["name"], "RPC Multicall Failure during balance/rewards verification. Skipping wallet for safety.", address=w["address"])
+            continue
+
+        total_p = info["pending"] + info["hcash_balance"]
         
         # Initialize wallet cards explicitly for BATCH action
-        _init_detail(w["name"], w["address"], status="running", initial_pending=info["pending"], initial_balance=info["balance"])
+        _init_detail(w["name"], w["address"], status="running", initial_pending=info["pending"], initial_balance=info["hcash_balance"])
         
         if total_p >= CLAIM_THRESHOLD:
-            eligible.append((w, info["pending"], info["balance"], info["balance_wei"]))
+            eligible.append((w, info["pending"], info["hcash_balance"], info["hcash_balance_wei"]))
             logger.debug(yellow_bold(f"[{w['name']}] Eligible: {format_decimal(total_p, 2)} >= {CLAIM_THRESHOLD}"))
         else:
             logger.debug(yellow_bold(f"[{w['name']}] Skip: {format_decimal(total_p, 2)} < {CLAIM_THRESHOLD}"))

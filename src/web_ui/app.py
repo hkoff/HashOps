@@ -631,11 +631,9 @@ def api_run():
                         }
                     step_type = act_key.rstrip('s').capitalize()
                     all_miner_plans[m_id]["planned"].add(step_type)
-                    if step_type == "Transfer":
-                        all_miner_plans[m_id]["planned"].add("Received")
 
         for m_id, p in all_miner_plans.items():
-            order = ["Withdraw", "Transfer", "Received", "Place"]
+            order = ["Withdraw", "Transfer", "Place"]
             sorted_steps = [s for s in order if s in p["planned"]]
             _prepare_miner_journey(m_id, p["nft_id"], p["name"], p["image"], sorted_steps, game_id=p.get("game_id"))
 

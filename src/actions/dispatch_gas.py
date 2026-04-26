@@ -7,11 +7,11 @@ from typing import List, Dict, Any
 from src.config import BLOCK_EXPLORER_URL, GAS_DISPATCH_MIN_BOTTOM, GAS_DISPATCH_STEP, GAS_DISPATCH_TOLERANCE, GAS_ESTIMATE_BUFFER, ACTION_NAMES
 from src.services.logger_setup import logger
 from src.utils.helpers import cyan_bold, yellow_bold, magenta_bold, red_bold, format_decimal, green_bold
-from src.core.blockchain import get_web3, get_batch_wallets_miners_info, get_game_main_contract, get_game_token_contract
+from src.core.blockchain import get_web3, get_wallets_basic_data, get_game_main_contract, get_game_token_contract
 from src.core.gas import get_eip1559_gas_params
 
 from src.actions.utils import get_batch_nonces
-from src.actions.ui_state import _upd, get_wallet_details, _set_avax_tx
+from src.actions.ui_state import _upd, get_wallet_details, _set_avax_tx, log_wallet_error
 from src.actions.bricks.transfer_avax import run_transfer_avax
 from src.actions.phase_engine import PhaseEngine, Phase, SubmissionResult
 from src.core.security import ANCHOR_AVAX_TOKEN, validate_authorized_wallet, validate_contract, validate_asset, SecurityException
@@ -74,7 +74,7 @@ class BatchGasPhaser:
         sender, dest, amt = item
         w_name = sender["name"]
         err_msg = error_msg or "AVAX submission failed."
-        _upd(w_name, error=err_msg, status="error")
+        log_wallet_error(w_name, err_msg, address=sender["address"])
 
     def on_gas_success(self, w_name, tx_hex, val, receipt):
         if isinstance(val, dict) and val.get("type") == "avax":
@@ -103,7 +103,7 @@ class BatchGasPhaser:
             if not error_msg: error_msg = "Unknown failure"
             log_err_msg = error_msg.replace("<br/>", " - ")
             logger.error(red_bold(f"[{w_name}] ✗ AVAX transfer to {dest} failed: {log_err_msg}"))
-            _upd(w_name, status="error", error=error_msg)
+            log_wallet_error(w_name, error_msg)
 
 def run_dispatch_gas(target_wallets: List[Dict[str, Any]], burner1_address: str) -> Dict[str, Any]:
     """Main entry point for the Dispatch Gas Fees Action via the UI."""
@@ -137,7 +137,7 @@ def run_dispatch_gas(target_wallets: List[Dict[str, Any]], burner1_address: str)
 
     # 2. Balance retrieval (batch_data contains "avax_balance")
     addresses = [w["address"] for w in target_wallets]
-    batch_data = get_batch_wallets_miners_info(w3, addresses, game_main, game_token, {})
+    batch_data = get_wallets_basic_data(w3, addresses, game_main, game_token)
     
     main_wallet = None
     burners = []
@@ -145,7 +145,14 @@ def run_dispatch_gas(target_wallets: List[Dict[str, Any]], burner1_address: str)
     # 3. Separate main_wallet and burners
     for w in target_wallets:
         addr_lower = w["address"].lower()
-        info = batch_data.get(w["address"], {"avax_balance": 0.0, "hcash_balance": 0.0})
+        info = batch_data.get(addr_lower, {"avax_balance": 0.0, "hcash_balance": 0.0, "rpc_error": True})
+        
+        if info.get("rpc_error"):
+            logger.error(red_bold(f"[{w['name']}] Skipping Gas Dispatch due to RPC error during Phase 0."))
+            _upd(w["name"], status="error")
+            log_wallet_error(w["name"], "RPC Multicall Failure during balance verification. Skipping to prevent inaccurate transfer.", address=w["address"])
+            continue
+
         bal = info.get("avax_balance", 0.0)
         
         is_main = addr_lower == burner1_address.lower()
@@ -293,7 +300,7 @@ def run_dispatch_gas(target_wallets: List[Dict[str, Any]], burner1_address: str)
                     break
         
         if has_error:
-            _upd(wn, status="error", error="An AVAX transaction failed.")
+            log_wallet_error(wn, "An AVAX transaction failed.", address=w["address"])
         else:
             _upd(wn, status="success")
 

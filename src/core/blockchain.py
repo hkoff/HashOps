@@ -197,22 +197,6 @@ def get_marketplace_contract(w3: Web3) -> Any:
 # ─────────────────────────────────────────────────────────────────
 # VIEW FUNCTIONS
 # ─────────────────────────────────────────────────────────────────
-def get_pending_rewards(w3: Web3, game_main: Any, address: str) -> int:
-    """Retrieves pending rewards (Wei format)."""
-    return game_main.functions.pendingRewards(address).call()
-
-def get_hcash_balance(w3: Web3, game_token: Any, address: str) -> float:
-    """hCASH balance of a user (float format)."""
-    raw: int = game_token.functions.balanceOf(address).call()
-    return raw / 1e18
-
-def get_avax_balance(w3: Web3, address: str) -> float:
-    """Native AVAX balance of a wallet."""
-    try:
-        raw = w3.eth.get_balance(Web3.to_checksum_address(address))
-        return raw / 1e18
-    except Exception:
-        return 0.0
 
 def check_connection(w3: Web3) -> bool:
     """Verifies that the RPC connection is active and Chain ID is correct."""
@@ -808,8 +792,12 @@ def enrich_wallets_with_marketplace(
                 f"This can happen if the inventory API is lagging or if the NFT is in a wallet not managed by the bot."
             ))
 
-def get_multiple_wallets_data(w3: Web3, addresses: List[str], game_main: Any, game_token: Any) -> Dict[str, Dict[str, Any]]:
-    """Retrieves pendingRewards and hcashBalance for a list of wallets via Multicall3 (chunked)."""
+def get_wallets_basic_data(w3: Web3, addresses: List[str], game_main: Any, game_token: Any) -> Dict[str, Dict[str, Any]]:
+    """
+    Retrieves AVAX balance, pendingRewards, and hcashBalance for a list of wallets via Multicall3 (chunked).
+    Ideal for Phase 0 of Dispatch Gas and Claim Rewards where full global refresh is unnecessary.
+    """
+    logger.info(cyan_bold(f"[BLOCKCHAIN] Refreshing balances & pending rewards for {len(addresses)} wallet(s)..."))
     mc = get_multicall_contract(w3)
     data = {}
     
@@ -820,18 +808,25 @@ def get_multiple_wallets_data(w3: Web3, addresses: List[str], game_main: Any, ga
         
         for addr in chunk:
             c_addr = Web3.to_checksum_address(addr)
-            # Call 1: pendingRewards
+            # Call 1: AVAX Balance
+            calls.append({"target": mc.address, "allowFailure": True, "callData": mc.encode_abi("getEthBalance", [c_addr])})
+            # Call 2: pendingRewards
             calls.append({"target": game_main.address, "allowFailure": True, "callData": game_main.encode_abi("pendingRewards", [c_addr])})
-            # Call 2: balanceOf hCASH
+            # Call 3: balanceOf hCASH
             calls.append({"target": game_token.address, "allowFailure": True, "callData": game_token.encode_abi("balanceOf", [c_addr])})
 
-        logger.debug(cyan_bold(f"[BLOCKCHAIN] Executing Multicall3 chunk ({len(chunk)} wallets)..."))
+        logger.debug(cyan_bold(f"[BLOCKCHAIN] Executing Basic Multicall3 chunk ({len(chunk)} wallets)..."))
         results = mc.functions.aggregate3(calls).call()
         
         for i, addr in enumerate(chunk):
-            pending_res = results[i*2]
-            balance_res = results[i*2 + 1]
+            eth_res = results[i*3]
+            pending_res = results[i*3 + 1]
+            balance_res = results[i*3 + 2]
             
+            # 1. Detect RPC Failures
+            rpc_error = not (eth_res[0] and pending_res[0] and balance_res[0])
+            
+            avax_float = int.from_bytes(eth_res[1], "big") / 1e18 if eth_res[0] and eth_res[1] else 0.0
             pending_float = int.from_bytes(pending_res[1], "big") / 1e18 if pending_res[0] and pending_res[1] else 0.0
             balance_float = int.from_bytes(balance_res[1], "big") / 1e18 if balance_res[0] and balance_res[1] else 0.0
             
@@ -839,10 +834,17 @@ def get_multiple_wallets_data(w3: Web3, addresses: List[str], game_main: Any, ga
             balance_wei = int.from_bytes(balance_res[1], "big") if balance_res[0] and balance_res[1] else 0
 
             data[addr.lower()] = {
+                "avax_balance": avax_float,
                 "pending": pending_float,
-                "balance": balance_float,
+                "hcash_balance": balance_float,
                 "pending_wei": pending_wei,
-                "balance_wei": balance_wei
+                "hcash_balance_wei": balance_wei,
+                "rpc_error": rpc_error
             }
+            
+            if rpc_error:
+                logger.error(red_bold(f"      · {get_wallet_name(addr)}: ❌ RPC Multicall Failure (Partial data)"))
+            else:
+                logger.info(blue_bold(f"      · {get_wallet_name(addr)}: {avax_float:.4f} AVAX | {pending_float:.2f} Pend. | {balance_float:.2f} hCASH"))
     
     return data
